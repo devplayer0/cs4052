@@ -1,13 +1,15 @@
-.PHONY: all clean bin/%
+.PHONY: all clean phony_explicit
 
 VERSION := latest
 
 default: bin/netsoc
 
-bin/%:
+phony_explicit:
+
+bin/%: phony_explicit
 	go build -o $@ ./cmd/$(shell basename $@)
 
-dev/%:
+dev/%: phony_explicit
 	cat tools.go | sed -nr 's|^\t_ "(.+)"$$|\1|p' | xargs -tI % go get %
 
 	$(eval BIN = $(shell basename $@))
