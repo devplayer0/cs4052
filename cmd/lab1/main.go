@@ -15,6 +15,8 @@ import (
 
 var window *glfw.Window
 var program, vao uint32
+var previousTime float64
+var frames uint32
 
 var vertexShader = heredoc.Doc(`
 	#version 400
@@ -161,6 +163,14 @@ func setup() error {
 }
 
 func loop() {
+	t := glfw.GetTime()
+	if t-previousTime > 1 {
+		log.Printf("FPS: %v", frames)
+
+		frames = 0
+		previousTime = t
+	}
+
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 	gl.UseProgram(program)
@@ -169,6 +179,7 @@ func loop() {
 
 	window.SwapBuffers()
 	glfw.PollEvents()
+	frames++
 }
 
 func init() {
@@ -212,6 +223,7 @@ func main() {
 		log.Fatalf("Setup failed: %v", err)
 	}
 
+	previousTime = glfw.GetTime()
 	for !window.ShouldClose() {
 		loop()
 	}
