@@ -5,7 +5,7 @@ VERSION := latest
 default: bin/netsoc
 
 bin/%:
-	CGO_ENABLED=0 go build -o $@ ./cmd/$(shell basename $@)
+	go build -o $@ ./cmd/$(shell basename $@)
 
 dev/%:
 	cat tools.go | sed -nr 's|^\t_ "(.+)"$$|\1|p' | xargs -tI % go get %
