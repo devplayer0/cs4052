@@ -14,7 +14,8 @@ import (
 )
 
 var window *glfw.Window
-var program, vao uint32
+var program, vao, vbo uint32
+var programYellow, vaoYellow, vboYellow uint32
 var previousTime float64
 var frames uint32
 
@@ -39,6 +40,16 @@ var fragmentShader = heredoc.Doc(`
 
 	void main() {
 		outColor = color;
+	}
+`) + "\x00"
+var fragmentShaderYellow = heredoc.Doc(`
+	#version 400
+
+	in vec4 color;
+	out vec4 outColor;
+
+	void main() {
+		outColor = vec4(1.0, 1.0, 0.0, 1.0);
 	}
 `) + "\x00"
 
@@ -118,7 +129,9 @@ func generateObjectBuffer(program uint32, vertices []float32, colors []float32) 
 	// (vertices + colours) * 4 (sizeof(float32))
 	gl.BufferData(gl.ARRAY_BUFFER, (len(vertices)+len(colors))*4, nil, gl.STATIC_DRAW)
 	gl.BufferSubData(gl.ARRAY_BUFFER, 0, len(vertices)*4, gl.Ptr(vertices))
-	gl.BufferSubData(gl.ARRAY_BUFFER, len(vertices)*4, len(colors)*4, gl.Ptr(colors))
+	if len(colors) != 0 {
+		gl.BufferSubData(gl.ARRAY_BUFFER, len(vertices)*4, len(colors)*4, gl.Ptr(colors))
+	}
 	return vbo
 }
 
@@ -135,29 +148,68 @@ func linkBufferToProgram(program, buffer uint32, colorOffset int) {
 	gl.VertexAttribPointer(colorAttrib, 4, gl.FLOAT, false, 0, gl.PtrOffset(colorOffset))
 }
 
-func setup() error {
+func setup2Triangles() error {
 	var err error
 	program, err = createProgram(vertexShader, fragmentShader)
 	if err != nil {
 		return fmt.Errorf("failed to create program: %v", err)
 	}
 
+	gl.GenVertexArrays(1, &vao)
+	gl.BindVertexArray(vao)
+
 	vertices := []float32{
-		-1, -1, 0,
-		1, -1, 0,
-		0, 1, 0,
+		-0.9, -0.9, 0,
+		0.9, -0.9, 0,
+		0, -0.1, 0,
+
+		0.9, 0.9, 0,
+		-0.9, 0.9, 0,
+		0, 0.1, 0,
 	}
 	colors := []float32{
 		0, 1, 0, 1,
 		1, 0, 0, 1,
 		0, 0, 1, 1,
+
+		1, 0, 0, 1,
+		0, 0, 1, 1,
+		0, 1, 0, 1,
 	}
 
-	gl.GenVertexArrays(1, &vao)
-	gl.BindVertexArray(vao)
-
-	vbo := generateObjectBuffer(program, vertices, colors)
+	vbo = generateObjectBuffer(program, vertices, colors)
 	linkBufferToProgram(program, vbo, len(vertices)*4)
+	return nil
+}
+func setupYellow() error {
+	var err error
+	programYellow, err = createProgram(vertexShader, fragmentShaderYellow)
+	if err != nil {
+		return fmt.Errorf("failed to create yellow program: %v", err)
+	}
+
+	gl.GenVertexArrays(1, &vaoYellow)
+	gl.BindVertexArray(vaoYellow)
+
+	vertices := []float32{
+		0.7, 0.3, 0,
+		0.7, -0.3, 0,
+		0.4, 0, 0,
+	}
+
+	vboYellow = generateObjectBuffer(programYellow, vertices, []float32{})
+	linkBufferToProgram(program, vboYellow, len(vertices)*4)
+	return nil
+}
+
+func setup() error {
+	if err := setup2Triangles(); err != nil {
+		return fmt.Errorf("failed to set up 2 triangles: %w", err)
+	}
+
+	if err := setupYellow(); err != nil {
+		return fmt.Errorf("failed to set up 2 triangles: %w", err)
+	}
 
 	return nil
 }
@@ -173,8 +225,16 @@ func loop() {
 
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
+	// 2 triangles
 	gl.UseProgram(program)
 	gl.BindVertexArray(vao)
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+	gl.DrawArrays(gl.TRIANGLES, 0, 6)
+
+	// yellow triangles
+	gl.UseProgram(programYellow)
+	gl.BindVertexArray(vaoYellow)
+	gl.BindBuffer(gl.ARRAY_BUFFER, vboYellow)
 	gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
 	window.SwapBuffers()
