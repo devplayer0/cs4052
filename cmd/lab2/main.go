@@ -53,9 +53,9 @@ func setup() error {
 
 	vertexBuf = util.NewBuffer()
 	vertexBuf.SetVertices([]mgl32.Vec3{
-		{0.7, 0.3, 0},
-		{0.7, -0.3, 0},
-		{0.4, 0, 0},
+		{-1, -1, 0},
+		{1, -1, 0},
+		{0, 0, 0},
 	})
 	yellowProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, vertexBuf, 0)
 
@@ -64,16 +64,35 @@ func setup() error {
 
 func loop() {
 	frames := 0
-	previousTime := glfw.GetTime()
+	lastFPS := glfw.GetTime()
+	previousTime := lastFPS
+	var angle float32
+
+	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+		switch key {
+		case glfw.KeyLeft:
+			angle -= 5
+		case glfw.KeyRight:
+			angle += 5
+		}
+	})
 
 	for !window.ShouldClose() {
 		t := glfw.GetTime()
-		if t-previousTime > 1 {
+		if t-lastFPS > 1 {
 			log.Printf("FPS: %v", frames)
 
 			frames = 0
-			previousTime = t
+			lastFPS = t
 		}
+
+		_ = t - previousTime
+		if angle >= 360 {
+			angle = 0
+		}
+		yTrans := mgl32.Scale3D(0.3, 0.3, 0).
+			Mul4(mgl32.Translate3D(0.7, 0, 0)).
+			Mul4(mgl32.HomogRotate3DZ(mgl32.DegToRad(angle)))
 
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
@@ -81,11 +100,14 @@ func loop() {
 		gl.DrawArrays(gl.TRIANGLES, 0, 6)
 
 		yellowProg.Use()
+		gl.UniformMatrix4fv(yellowProg.Uniform("transform"), 1, false, &yTrans[0])
 		gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
 		window.SwapBuffers()
 		glfw.PollEvents()
 		frames++
+
+		previousTime = t
 	}
 }
 

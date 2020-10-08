@@ -15,12 +15,16 @@ type Program struct {
 
 	Vertex   *Shader
 	Fragment *Shader
+
+	uniforms map[string]int32
 }
 
 // NewProgram creates a new OpenGL program
 func NewProgram() *Program {
 	p := &Program{
 		ID: gl.CreateProgram(),
+
+		uniforms: make(map[string]int32),
 	}
 	gl.GenVertexArrays(1, &p.VAO)
 
@@ -94,4 +98,18 @@ func (p *Program) LinkVertexPointer(va string, size int32, vType uint32, b *Buff
 	attrib := uint32(gl.GetAttribLocation(p.ID, gl.Str(va+"\x00")))
 	gl.EnableVertexAttribArray(attrib)
 	gl.VertexAttribPointer(attrib, size, vType, false, 0, gl.PtrOffset(offset))
+}
+
+// Uniform gets a uniform's location
+func (p *Program) Uniform(n string) int32 {
+	p.Use()
+
+	u, ok := p.uniforms[n]
+	if ok {
+		return u
+	}
+
+	u = gl.GetUniformLocation(p.ID, gl.Str(n+"\x00"))
+	p.uniforms[n] = u
+	return u
 }
