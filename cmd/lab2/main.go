@@ -14,7 +14,8 @@ import (
 
 var window *glfw.Window
 
-var colorProg, yellowProg *util.Program
+var colorProg, yellowProg, monkeyProg *util.Program
+var monkeyModel *util.Model
 
 func setup() error {
 	colorProg = util.NewProgram()
@@ -23,7 +24,7 @@ func setup() error {
 	}
 
 	vertexBuf := util.NewBuffer()
-	vertexBuf.SetVertices([]mgl32.Vec3{
+	vertexBuf.SetVec3([]mgl32.Vec3{
 		{-0.9, -0.9, 0},
 		{0.9, -0.9, 0},
 		{0, -0.1, 0},
@@ -52,12 +53,40 @@ func setup() error {
 	}
 
 	vertexBuf = util.NewBuffer()
-	vertexBuf.SetVertices([]mgl32.Vec3{
+	vertexBuf.SetVec3([]mgl32.Vec3{
 		{-1, -1, 0},
 		{1, -1, 0},
 		{0, 0, 0},
 	})
 	yellowProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, vertexBuf, 0)
+
+	var err error
+	monkeyModel, err = util.NewModel("assets/meshes/monkey.obj")
+	if err != nil {
+		return fmt.Errorf("failed to load mesh: %w", err)
+	}
+
+	monkeyProg = util.NewProgram()
+	if err := monkeyProg.LinkFiles("assets/shaders/model.vs", "assets/shaders/model.fs"); err != nil {
+		return fmt.Errorf("failed to set up monkey program: %w", err)
+	}
+
+	vertexBuf = util.NewBuffer()
+	vertexBuf.SetVec3(monkeyModel.Vertices)
+	monkeyProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, vertexBuf, 0)
+
+	normalBuf := util.NewBuffer()
+	normalBuf.SetVec3(monkeyModel.Normals)
+	monkeyProg.LinkVertexPointer("Normal", 3, gl.FLOAT, normalBuf, 0)
+
+	projection := mgl32.Perspective(mgl32.DegToRad(45.0), float32(800)/600, 0.1, 10.0)
+	gl.UniformMatrix4fv(monkeyProg.Uniform("projection"), 1, false, &projection[0])
+
+	camera := mgl32.LookAtV(mgl32.Vec3{3, 3, 3}, mgl32.Vec3{0, 0, 0}, mgl32.Vec3{0, 1, 0})
+	gl.UniformMatrix4fv(monkeyProg.Uniform("camera"), 1, false, &camera[0])
+
+	model := mgl32.Ident4()
+	gl.UniformMatrix4fv(monkeyProg.Uniform("model"), 1, false, &model[0])
 
 	return nil
 }
@@ -102,6 +131,9 @@ func loop() {
 		yellowProg.Use()
 		gl.UniformMatrix4fv(yellowProg.Uniform("transform"), 1, false, &yTrans[0])
 		gl.DrawArrays(gl.TRIANGLES, 0, 3)
+
+		monkeyProg.Use()
+		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, int32(len(monkeyModel.Vertices)))
 
 		window.SwapBuffers()
 		glfw.PollEvents()

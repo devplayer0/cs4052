@@ -14,7 +14,7 @@ dev/%: phony_explicit
 
 	$(eval BIN = $(shell basename $@))
 	CompileDaemon -exclude-dir=.git -build="go build -o bin/$(BIN) ./cmd/$(BIN)" \
-		-include '*.vs' -include '*.fs' -command="bin/$(BIN)" -graceful-kill
+		-include '*.vs' -include '*.fs'
 
 clean:
 	-rm -f bin/*

@@ -35,8 +35,8 @@ func (b *Buffer) SetData(data []byte) {
 	gl.BufferData(gl.ARRAY_BUFFER, len(data), gl.Ptr(data), gl.STATIC_DRAW)
 }
 
-// SetVertices sets the VBO's data to the list of vertices
-func (b *Buffer) SetVertices(vertices []mgl32.Vec3) {
+// SetVec3 sets the VBO's data to the list of Vec3 (e.g. vertices)
+func (b *Buffer) SetVec3(vertices []mgl32.Vec3) {
 	buf := &bytes.Buffer{}
 	for _, v := range vertices {
 		binary.Write(buf, nativeOrder, v.X())
