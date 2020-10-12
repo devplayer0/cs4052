@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-gl/gl/v4.6-core/gl"
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Program represents an OpenGL program
@@ -112,4 +113,14 @@ func (p *Program) Uniform(n string) int32 {
 	u = gl.GetUniformLocation(p.ID, gl.Str(n+"\x00"))
 	p.uniforms[n] = u
 	return u
+}
+
+// SetUniformMat3 sets a mat3 uniform value
+func (p *Program) SetUniformMat3(n string, val mgl32.Mat3) {
+	gl.UniformMatrix3fv(p.Uniform(n), 1, false, &val[0])
+}
+
+// SetUniformMat4 sets a mat4 uniform value
+func (p *Program) SetUniformMat4(n string, val mgl32.Mat4) {
+	gl.UniformMatrix4fv(p.Uniform(n), 1, false, &val[0])
 }
