@@ -102,10 +102,7 @@ func loop() {
 	w, h := window.GetSize()
 	fov := float32(45.0)
 
-	cameraUp := mgl32.Vec3{0, 1, 0}
-	cameraPos := mgl32.Vec3{0, 2, 5}
-	cameraRot := mgl32.Vec2{-90, 0}
-	cameraDirection := mgl32.Vec3{}
+	camera := util.NewCamera(mgl32.Vec3{0, 2, 5}, mgl32.Vec2{-90, 0}, true)
 
 	colorModel := mgl32.Translate3D(0, 2, 0)
 	yellowModel := mgl32.HomogRotate3DX(mgl32.DegToRad(-90))
@@ -122,14 +119,10 @@ func loop() {
 		dx := float32(xpos - ocx)
 		dy := float32(ypos - ocy)
 
-		ax := cameraRot.X() + (mouseSensitivity * dx * d)
-		ay := cameraRot.Y() - (mouseSensitivity * dy * d)
-		if ay > 90 {
-			ay = 90
-		} else if ay < -90 {
-			ay = -90
-		}
-		cameraRot = mgl32.Vec2{ax, ay}
+		camera.SetRotation(camera.Rotation().Add(mgl32.Vec2{
+			mouseSensitivity * dx * d,
+			-mouseSensitivity * dy * d,
+		}))
 
 		ocx = xpos
 		ocy = ypos
@@ -148,50 +141,33 @@ func loop() {
 		})
 
 		util.KeyAction(window, glfw.KeyW, func() {
-			cameraPos = cameraPos.Add(mgl32.Vec3{
-				movementSpeed * d * cameraDirection.X(),
-				0,
-				movementSpeed * d * cameraDirection.Z(),
-			})
+			camera.MoveZ(movementSpeed * d)
 		})
 		util.KeyAction(window, glfw.KeyS, func() {
-			cameraPos = cameraPos.Sub(mgl32.Vec3{
-				movementSpeed * d * cameraDirection.X(),
-				0,
-				movementSpeed * d * cameraDirection.Z(),
-			})
+			camera.MoveZ(-movementSpeed * d)
 		})
 
 		util.KeyAction(window, glfw.KeyA, func() {
-			cameraPos = cameraPos.Sub(cameraDirection.Cross(cameraUp).Normalize().Mul(movementSpeed * d))
+			camera.MoveX(-movementSpeed * d)
 		})
 		util.KeyAction(window, glfw.KeyD, func() {
-			cameraPos = cameraPos.Add(cameraDirection.Cross(cameraUp).Normalize().Mul(movementSpeed * d))
+			camera.MoveX(movementSpeed * d)
 		})
 
-		util.KeyAction(window, glfw.KeyC, func() {
-			cameraPos = cameraPos.Sub(mgl32.Vec3{0, movementSpeed * d, 0})
-		})
 		util.KeyAction(window, glfw.KeySpace, func() {
-			cameraPos = cameraPos.Add(mgl32.Vec3{0, movementSpeed * d, 0})
+			camera.MoveY(movementSpeed * d)
+		})
+		util.KeyAction(window, glfw.KeyC, func() {
+			camera.MoveY(-movementSpeed * d)
 		})
 
 		projection := mgl32.Perspective(mgl32.DegToRad(fov), float32(w)/float32(h), 0.1, 100)
 
-		//camera := mgl32.LookAtV(cameraPos, mgl32.Vec3{0, 0, 0}, mgl32.Vec3{0, 1, 0})
-		cameraDirection = mgl32.Vec3{
-			util.Cos(mgl32.DegToRad(cameraRot.X())) * util.Cos(mgl32.DegToRad(cameraRot.Y())),
-			util.Sin(mgl32.DegToRad(cameraRot.Y())),
-			util.Sin(mgl32.DegToRad(cameraRot.X())) * util.Cos(mgl32.DegToRad(cameraRot.Y())),
-		}.Normalize()
-		camera := mgl32.Ident4().
-			Mul4(mgl32.LookAtV(cameraPos, cameraPos.Add(cameraDirection), cameraUp))
-
 		if t-lastFPS > 1 {
 			log.Printf("FPS: %v", frames)
 			log.Printf("FOV: %v", fov)
-			log.Printf("Camera position: %v", cameraPos)
-			log.Printf("Camera rotation: %v", cameraRot)
+			log.Printf("Camera position: %v", camera.Position)
+			log.Printf("Camera rotation: %v", camera.Rotation())
 
 			frames = 0
 			lastFPS = t
@@ -202,13 +178,13 @@ func loop() {
 
 		colorProg.Use()
 		colorProg.SetUniformMat4("projection", projection)
-		colorProg.SetUniformMat4("camera", camera)
+		colorProg.SetUniformMat4("camera", camera.Transform())
 		colorProg.SetUniformMat4("model", colorModel)
 		gl.DrawArrays(gl.TRIANGLES, 0, 6)
 
 		yellowProg.Use()
 		yellowProg.SetUniformMat4("projection", projection)
-		yellowProg.SetUniformMat4("camera", camera)
+		yellowProg.SetUniformMat4("camera", camera.Transform())
 		yellowProg.SetUniformMat4("model", yellowModel)
 		gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
