@@ -11,28 +11,30 @@ import (
 // TODO: Determine actual system byte order
 var nativeOrder = binary.LittleEndian
 
-// Buffer represents an OpenGL VBO
+// Buffer represents an OpenGL buffer
 type Buffer struct {
-	ID uint32
+	t uint32
+
+	id uint32
 }
 
 // NewBuffer creates a new OpenGL VBO
-func NewBuffer() *Buffer {
-	b := &Buffer{}
-	gl.GenBuffers(1, &b.ID)
+func NewBuffer(t uint32) *Buffer {
+	b := &Buffer{t: t}
+	gl.GenBuffers(1, &b.id)
 
 	return b
 }
 
 // Bind binds the buffer
 func (b *Buffer) Bind() {
-	gl.BindBuffer(gl.ARRAY_BUFFER, b.ID)
+	gl.BindBuffer(b.t, b.id)
 }
 
-// SetData sets the VBO's data
+// SetData sets the buffers's data
 func (b *Buffer) SetData(data []byte) {
 	b.Bind()
-	gl.BufferData(gl.ARRAY_BUFFER, len(data), gl.Ptr(data), gl.STATIC_DRAW)
+	gl.BufferData(b.t, len(data), gl.Ptr(data), gl.STATIC_DRAW)
 }
 
 // SetVec2 sets the VBO's data to the list of Vec2 (e.g. vertices)

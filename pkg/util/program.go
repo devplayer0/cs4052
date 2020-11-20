@@ -92,13 +92,13 @@ func (p *Program) Use() {
 }
 
 // LinkVertexPointer sets up a named vertex attribute to point to a buffer
-func (p *Program) LinkVertexPointer(va string, size int32, vType uint32, b *Buffer, offset int) {
+func (p *Program) LinkVertexPointer(va string, size int32, vType uint32, stride int32, b *Buffer, offset int) {
 	p.Use()
 	b.Bind()
 
 	attrib := uint32(gl.GetAttribLocation(p.ID, gl.Str(va+"\x00")))
 	gl.EnableVertexAttribArray(attrib)
-	gl.VertexAttribPointer(attrib, size, vType, false, 0, gl.PtrOffset(offset))
+	gl.VertexAttribPointer(attrib, size, vType, false, stride, gl.PtrOffset(offset))
 }
 
 // Uniform gets a uniform's location

@@ -15,7 +15,7 @@ import (
 var window *glfw.Window
 
 var colorProg, yellowProg, monkeyProg *util.Program
-var monkeyModel *util.Model
+var monkeyModel *util.Mesh
 
 func setup() error {
 	colorProg = util.NewProgram()
@@ -23,7 +23,7 @@ func setup() error {
 		return fmt.Errorf("failed to set up color triangle program: %w", err)
 	}
 
-	vertexBuf := util.NewBuffer()
+	vertexBuf := util.NewBuffer(gl.ARRAY_BUFFER)
 	vertexBuf.SetVec3([]mgl32.Vec3{
 		{-0.9, -0.9, 0},
 		{0.9, -0.9, 0},
@@ -33,9 +33,9 @@ func setup() error {
 		{-0.9, 0.9, 0},
 		{0, 0.1, 0},
 	})
-	colorProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, vertexBuf, 0)
+	colorProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, 0, vertexBuf, 0)
 
-	colorBuf := util.NewBuffer()
+	colorBuf := util.NewBuffer(gl.ARRAY_BUFFER)
 	colorBuf.SetVec4([]mgl32.Vec4{
 		{0, 1, 0, 1},
 		{1, 0, 0, 1},
@@ -45,23 +45,23 @@ func setup() error {
 		{0, 0, 1, 1},
 		{0, 1, 0, 1},
 	})
-	colorProg.LinkVertexPointer("vColor", 4, gl.FLOAT, colorBuf, 0)
+	colorProg.LinkVertexPointer("vColor", 4, gl.FLOAT, 0, colorBuf, 0)
 
 	yellowProg = util.NewProgram()
 	if err := yellowProg.LinkFiles("assets/shaders/yellow_tri.vs", "assets/shaders/yellow_tri.fs"); err != nil {
 		return fmt.Errorf("failed to set up yellow triangle program: %w", err)
 	}
 
-	vertexBuf = util.NewBuffer()
+	vertexBuf = util.NewBuffer(gl.ARRAY_BUFFER)
 	vertexBuf.SetVec3([]mgl32.Vec3{
 		{-1, -1, 0},
 		{1, -1, 0},
 		{0, 0, 0},
 	})
-	yellowProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, vertexBuf, 0)
+	yellowProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, 0, vertexBuf, 0)
 
 	var err error
-	monkeyModel, err = util.NewModel("assets/meshes/monkey.obj")
+	monkeyModel, err = util.NewMesh("assets/meshes/monkey.obj")
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
@@ -71,13 +71,13 @@ func setup() error {
 		return fmt.Errorf("failed to set up monkey program: %w", err)
 	}
 
-	vertexBuf = util.NewBuffer()
-	vertexBuf.SetVec3(monkeyModel.Vertices)
-	monkeyProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, vertexBuf, 0)
+	//vertexBuf = util.NewBuffer(gl.ARRAY_BUFFER)
+	//vertexBuf.SetVec3(monkeyModel.Vertices)
+	//monkeyProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, 0, vertexBuf, 0)
 
-	normalBuf := util.NewBuffer()
-	normalBuf.SetVec3(monkeyModel.Normals)
-	monkeyProg.LinkVertexPointer("Normal", 3, gl.FLOAT, normalBuf, 0)
+	//normalBuf := util.NewBuffer(gl.ARRAY_BUFFER)
+	//normalBuf.SetVec3(monkeyModel.Normals)
+	//monkeyProg.LinkVertexPointer("Normal", 3, gl.FLOAT, 0, normalBuf, 0)
 
 	projection := mgl32.Perspective(mgl32.DegToRad(45.0), float32(800)/600, 0.1, 10.0)
 	gl.UniformMatrix4fv(monkeyProg.Uniform("projection"), 1, false, &projection[0])

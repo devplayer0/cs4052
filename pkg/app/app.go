@@ -23,6 +23,9 @@ type App struct {
 	colorTri  *util.Program
 	yellowTri *util.Program
 
+	monkeyModel *util.Mesh
+	monkey      *util.Program
+
 	previousTime float64
 
 	lastDebug float64
@@ -30,11 +33,13 @@ type App struct {
 	ocx, ocy  float64
 	d         float32
 
-	fov float32
+	fov       float32
+	wireframe bool
 
-	projection              mgl32.Mat4
-	camera                  *util.Camera
-	colorModel, yellowModel mgl32.Mat4
+	projection mgl32.Mat4
+	camera     *util.Camera
+
+	colorTrans, yellowTrans, monkeyTrans mgl32.Mat4
 }
 
 // NewApp creates a new app for the window
@@ -42,8 +47,9 @@ func NewApp(w *glfw.Window) *App {
 	a := &App{
 		window: w,
 
-		colorModel:  mgl32.Translate3D(0, 2, 0),
-		yellowModel: mgl32.HomogRotate3DX(mgl32.DegToRad(-90)),
+		colorTrans:  mgl32.Translate3D(0, 2, 0),
+		yellowTrans: mgl32.HomogRotate3DX(mgl32.DegToRad(-90)),
+		monkeyTrans: mgl32.Translate3D(3, 2, 0),
 
 		fov:    45,
 		camera: util.NewCamera(mgl32.Vec3{0, 2, 5}, mgl32.Vec2{-90, 0}, true),
@@ -65,7 +71,7 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to set up crosshair program: %w", err)
 	}
 
-	vertexBuf := util.NewBuffer()
+	vertexBuf := util.NewBuffer(gl.ARRAY_BUFFER)
 	vertexBuf.SetVec2([]mgl32.Vec2{
 		{-1, 0},
 		{1, 0},
@@ -73,7 +79,7 @@ func (a *App) Setup() error {
 		{0, -1},
 		{0, 1},
 	})
-	a.crosshair.LinkVertexPointer("vPosition", 2, gl.FLOAT, vertexBuf, 0)
+	a.crosshair.LinkVertexPointer("vPosition", 2, gl.FLOAT, 0, vertexBuf, 0)
 
 	wi, hi := a.window.GetSize()
 	w := float32(wi)
@@ -86,7 +92,7 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to set up color triangle program: %w", err)
 	}
 
-	vertexBuf = util.NewBuffer()
+	vertexBuf = util.NewBuffer(gl.ARRAY_BUFFER)
 	vertexBuf.SetVec3([]mgl32.Vec3{
 		{-1, -1, 0},
 		{1, -1, 0},
@@ -96,9 +102,9 @@ func (a *App) Setup() error {
 		{-1, 1, 0},
 		{0, 0, 0},
 	})
-	a.colorTri.LinkVertexPointer("vPosition", 3, gl.FLOAT, vertexBuf, 0)
+	a.colorTri.LinkVertexPointer("vPosition", 3, gl.FLOAT, 0, vertexBuf, 0)
 
-	colorBuf := util.NewBuffer()
+	colorBuf := util.NewBuffer(gl.ARRAY_BUFFER)
 	colorBuf.SetVec4([]mgl32.Vec4{
 		{0, 1, 0, 1},
 		{1, 0, 0, 1},
@@ -108,28 +114,36 @@ func (a *App) Setup() error {
 		{0, 0, 1, 1},
 		{0, 1, 0, 1},
 	})
-	a.colorTri.LinkVertexPointer("vColor", 4, gl.FLOAT, colorBuf, 0)
+	a.colorTri.LinkVertexPointer("vColor", 4, gl.FLOAT, 0, colorBuf, 0)
 
 	a.yellowTri = util.NewProgram()
 	if err := a.yellowTri.LinkFiles("assets/shaders/yellow_3d.vs", "assets/shaders/yellow_tri.fs"); err != nil {
 		return fmt.Errorf("failed to set up yellow triangle program: %w", err)
 	}
 
-	vertexBuf = util.NewBuffer()
+	vertexBuf = util.NewBuffer(gl.ARRAY_BUFFER)
 	vertexBuf.SetVec3([]mgl32.Vec3{
 		{-1, -1, 0},
 		{1, -1, 0},
 		{0, 1, 0},
 	})
-	a.yellowTri.LinkVertexPointer("vPosition", 3, gl.FLOAT, vertexBuf, 0)
+	a.yellowTri.LinkVertexPointer("vPosition", 3, gl.FLOAT, 0, vertexBuf, 0)
 
-	//var err error
-	//monkeyModel, err = util.NewModel("assets/meshes/monkey.obj")
-	//if err != nil {
-	//	return fmt.Errorf("failed to load mesh: %w", err)
-	//}
+	var err error
+	a.monkeyModel, err = util.NewMesh("assets/meshes/monkey.obj")
+	if err != nil {
+		return fmt.Errorf("failed to load mesh: %w", err)
+	}
+
+	a.monkey = util.NewProgram()
+	if err := a.monkey.LinkFiles("assets/shaders/model.vs", "assets/shaders/model.fs"); err != nil {
+		return fmt.Errorf("failed to set up monkey program: %w", err)
+	}
+
+	a.monkeyModel.UploadToProgram(a.monkey)
 
 	gl.Enable(gl.DEPTH_TEST)
+	gl.DepthFunc(gl.LEQUAL)
 
 	return nil
 }
@@ -147,6 +161,20 @@ func (a *App) onCursorMove(w *glfw.Window, xpos, ypos float64) {
 	a.ocy = ypos
 }
 func (a *App) onKeyEvent(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+	if action == glfw.Release {
+		switch key {
+		case glfw.KeyF:
+			var m uint32
+			m = gl.LINE
+			if a.wireframe {
+				m = gl.FILL
+			}
+
+			gl.PolygonMode(gl.FRONT_AND_BACK, m)
+			a.wireframe = !a.wireframe
+		}
+	}
+
 	switch key {
 	case glfw.KeyEscape, glfw.KeyQ:
 		a.window.Destroy()
@@ -195,14 +223,20 @@ func (a *App) draw() {
 	a.colorTri.Use()
 	a.colorTri.SetUniformMat4("projection", a.projection)
 	a.colorTri.SetUniformMat4("camera", a.camera.Transform())
-	a.colorTri.SetUniformMat4("model", a.colorModel)
+	a.colorTri.SetUniformMat4("model", a.colorTrans)
 	gl.DrawArrays(gl.TRIANGLES, 0, 6)
 
 	a.yellowTri.Use()
 	a.yellowTri.SetUniformMat4("projection", a.projection)
 	a.yellowTri.SetUniformMat4("camera", a.camera.Transform())
-	a.yellowTri.SetUniformMat4("model", a.yellowModel)
+	a.yellowTri.SetUniformMat4("model", a.yellowTrans)
 	gl.DrawArrays(gl.TRIANGLES, 0, 3)
+
+	a.monkey.Use()
+	a.monkey.SetUniformMat4("projection", a.projection)
+	a.monkey.SetUniformMat4("camera", a.camera.Transform())
+	a.monkey.SetUniformMat4("model", a.monkeyTrans)
+	gl.DrawElements(gl.TRIANGLES, int32(len(a.monkeyModel.Indices)), gl.UNSIGNED_INT, gl.PtrOffset(0))
 
 	a.crosshair.Use()
 	gl.DrawArrays(gl.LINES, 0, 4)
