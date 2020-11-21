@@ -40,6 +40,12 @@ func (c *Camera) Rotation() mgl32.Vec2 {
 
 // SetRotation sets the camera's rotation
 func (c *Camera) SetRotation(r mgl32.Vec2) {
+	if r.X() > 180 {
+		r = mgl32.Vec2{-180, r.Y()}
+	} else if r.X() < -180 {
+		r = mgl32.Vec2{180, r.Y()}
+	}
+
 	if r.Y() > 90 {
 		r = mgl32.Vec2{r.X(), 89.9}
 	} else if r.Y() < -90 {

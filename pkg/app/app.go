@@ -55,7 +55,6 @@ func NewApp(w *glfw.Window) *App {
 		fov:    45,
 		camera: util.NewCamera(mgl32.Vec3{0, 2, 10}, mgl32.Vec2{-90, 0}, true),
 	}
-	a.ocx, a.ocy = w.GetCursorPos()
 	a.updateProjection()
 
 	return a
@@ -131,6 +130,8 @@ func (a *App) Setup() error {
 
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
+
+	a.ocx, a.ocy = a.window.GetCursorPos()
 
 	return nil
 }
