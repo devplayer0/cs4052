@@ -38,6 +38,9 @@ type App struct {
 	projection mgl32.Mat4
 	camera     *util.Camera
 
+	brrLamp       util.Lamp
+	brrLampOrbit  mgl32.Vec3
+	brrLampAngle  float32
 	backpackTrans mgl32.Mat4
 }
 
@@ -46,10 +49,11 @@ func NewApp(w *glfw.Window) *App {
 	a := &App{
 		window: w,
 
+		brrLampOrbit:  mgl32.Vec3{3, 8, 1},
 		backpackTrans: mgl32.Translate3D(3, 2, 0),
 
 		fov:    45,
-		camera: util.NewCamera(mgl32.Vec3{0, 2, 5}, mgl32.Vec2{-90, 0}, true),
+		camera: util.NewCamera(mgl32.Vec3{0, 2, 10}, mgl32.Vec2{-90, 0}, true),
 	}
 	a.ocx, a.ocy = w.GetCursorPos()
 	a.updateProjection()
@@ -86,6 +90,15 @@ func (a *App) Setup() error {
 	a.crosshair.SetUniformMat4("projection", mgl32.Ortho2D(0, w, 0, h))
 	a.crosshair.SetUniformMat4("model", mgl32.Translate3D(w/2, h/2, 0).Mul4(mgl32.Scale3D(8, 8, 1)))
 
+	a.brrLamp = util.Lamp{
+		Position: a.brrLampOrbit,
+
+		Ambient:     mgl32.Vec3{0.05, 0.00, 0.0},
+		Diffuse:     mgl32.Vec3{0.8, 0.0, 0.0},
+		Specular:    mgl32.Vec3{1, 0, 0},
+		Attenuation: util.AttenuationParams{1, 0.09, 0.032},
+	}
+
 	var err error
 	a.lighting, err = util.NewLightingVSFile("assets/shaders/model.vs", []*util.Lamp{
 		{
@@ -97,21 +110,14 @@ func (a *App) Setup() error {
 			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
 		},
 		{
-			Position: mgl32.Vec3{6, 8, 5},
+			Position: mgl32.Vec3{6, -2, 5},
 
 			Ambient:     mgl32.Vec3{0.02, 0.05, 0.01},
 			Diffuse:     mgl32.Vec3{0.3, 0.8, 0.15},
 			Specular:    mgl32.Vec3{0.4, 1, 0.2},
 			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
 		},
-		{
-			Position: mgl32.Vec3{3, -4, 1},
-
-			Ambient:     mgl32.Vec3{0.05, 0.00, 0.0},
-			Diffuse:     mgl32.Vec3{0.8, 0.0, 0.0},
-			Specular:    mgl32.Vec3{1, 0, 0},
-			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
-		},
+		&a.brrLamp,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize lighting: %w", err)
@@ -227,6 +233,15 @@ func (a *App) Update() {
 	}
 
 	a.readInputs()
+
+	brrLampTransform := util.TransFromPos(a.brrLampOrbit).Mul4(mgl32.HomogRotate3DY(a.brrLampAngle)).Mul4(mgl32.Translate3D(0, 0, -4))
+	a.brrLamp.Position = util.PosFromTrans(brrLampTransform)
+	a.lighting.Update()
+
+	a.brrLampAngle += 4 * a.d
+	if a.brrLampAngle > 360 {
+		a.brrLampAngle = 0
+	}
 
 	a.draw()
 
