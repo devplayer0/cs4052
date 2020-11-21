@@ -11,8 +11,7 @@ import (
 
 // Program represents an OpenGL program
 type Program struct {
-	ID  uint32
-	VAO uint32
+	ID uint32
 
 	Vertex   *Shader
 	Fragment *Shader
@@ -27,7 +26,6 @@ func NewProgram() *Program {
 
 		uniforms: make(map[string]int32),
 	}
-	gl.GenVertexArrays(1, &p.VAO)
 
 	return p
 }
@@ -88,17 +86,6 @@ func (p *Program) LinkFiles(vertex, fragment string) error {
 // Use sets up OpenGL to use this program
 func (p *Program) Use() {
 	gl.UseProgram(p.ID)
-	gl.BindVertexArray(p.VAO)
-}
-
-// LinkVertexPointer sets up a named vertex attribute to point to a buffer
-func (p *Program) LinkVertexPointer(va string, size int32, vType uint32, stride int32, b *Buffer, offset int) {
-	p.Use()
-	b.Bind()
-
-	attrib := uint32(gl.GetAttribLocation(p.ID, gl.Str(va+"\x00")))
-	gl.EnableVertexAttribArray(attrib)
-	gl.VertexAttribPointer(attrib, size, vType, false, stride, gl.PtrOffset(offset))
 }
 
 // Uniform gets a uniform's location
@@ -115,6 +102,16 @@ func (p *Program) Uniform(n string) int32 {
 	return u
 }
 
+// SetUniformFloat32 sets a float32 uniform value
+func (p *Program) SetUniformFloat32(n string, val float32) {
+	gl.Uniform1fv(p.Uniform(n), 1, &val)
+}
+
+// SetUniformVec3 sets a vec3 uniform value
+func (p *Program) SetUniformVec3(n string, val mgl32.Vec3) {
+	gl.Uniform3fv(p.Uniform(n), 1, &val[0])
+}
+
 // SetUniformMat3 sets a mat3 uniform value
 func (p *Program) SetUniformMat3(n string, val mgl32.Mat3) {
 	gl.UniformMatrix3fv(p.Uniform(n), 1, false, &val[0])
@@ -123,4 +120,11 @@ func (p *Program) SetUniformMat3(n string, val mgl32.Mat3) {
 // SetUniformMat4 sets a mat4 uniform value
 func (p *Program) SetUniformMat4(n string, val mgl32.Mat4) {
 	gl.UniformMatrix4fv(p.Uniform(n), 1, false, &val[0])
+}
+
+// Project sets the uniforms for the required 3D transformation matrices
+func (p *Program) Project(projection mgl32.Mat4, c *Camera, model mgl32.Mat4) {
+	p.SetUniformMat4("projection", projection)
+	p.SetUniformMat4("camera", c.Transform())
+	p.SetUniformMat4("model", model)
 }

@@ -11,6 +11,10 @@ import (
 	"github.com/sheenobu/go-obj/obj"
 )
 
+// VertexSize is the native size of the Vertex struct (each Vec element is a
+// 32-bit float, (3 + 3 + 2)*4)
+const VertexSize = 32
+
 // Vertex represents a vertex in a mesh (position, normal and UV coordinates)
 type Vertex struct {
 	Position mgl32.Vec3
@@ -23,6 +27,8 @@ type Vertex struct {
 type Mesh struct {
 	Indices  []uint32
 	Vertices []Vertex
+
+	VAO uint32
 }
 
 // NewMesh loads a mesh from a .obj file
@@ -68,9 +74,10 @@ func NewMesh(objFile string) (*Mesh, error) {
 	return m, nil
 }
 
-// UploadToProgram uploads mesh data into a new buffer attached to a shader program
-func (m *Mesh) UploadToProgram(p *Program) {
-	p.Use()
+// Upload uploads mesh data into buffers (vertex and element) attached to a new VAO
+func (m *Mesh) Upload(p *Program) {
+	gl.GenVertexArrays(1, &m.VAO)
+	gl.BindVertexArray(m.VAO)
 
 	buf := &bytes.Buffer{}
 	binary.Write(buf, nativeOrder, m.Indices)
@@ -84,5 +91,21 @@ func (m *Mesh) UploadToProgram(p *Program) {
 	vertexBuffer := NewBuffer(gl.ARRAY_BUFFER)
 	vertexBuffer.SetData(buf.Bytes())
 
-	p.LinkVertexPointer("vPosition", 3, gl.FLOAT, 32, vertexBuffer, 0)
+	vertexBuffer.LinkVertexPointer(p, "frag_pos", 3, gl.FLOAT, 32, 0)
+	vertexBuffer.LinkVertexPointer(p, "normal", 3, gl.FLOAT, 32, 12)
+	vertexBuffer.LinkVertexPointer(p, "uv", 2, gl.FLOAT, 32, 24)
+}
+
+// Draw renders the mesh with the given shader and projection
+func (m *Mesh) Draw(p *Program, proj mgl32.Mat4, c *Camera, trans mgl32.Mat4) {
+	p.Use()
+	p.Project(proj, c, trans)
+
+	// Hardcode to white for now
+	p.SetUniformVec3("in_color", mgl32.Vec3{1, 1, 1})
+	// Hardcode shininess for now
+	p.SetUniformFloat32("mat.spec_exponent", 64)
+
+	gl.BindVertexArray(m.VAO)
+	gl.DrawElements(gl.TRIANGLES, int32(len(m.Indices)), gl.UNSIGNED_INT, gl.PtrOffset(0))
 }

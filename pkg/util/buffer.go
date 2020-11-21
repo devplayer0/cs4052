@@ -37,6 +37,15 @@ func (b *Buffer) SetData(data []byte) {
 	gl.BufferData(b.t, len(data), gl.Ptr(data), gl.STATIC_DRAW)
 }
 
+// LinkVertexPointer sets up a named vertex attribute to point to a buffer
+func (b *Buffer) LinkVertexPointer(p *Program, va string, size int32, vType uint32, stride int32, offset int) {
+	b.Bind()
+
+	attrib := uint32(gl.GetAttribLocation(p.ID, gl.Str(va+"\x00")))
+	gl.EnableVertexAttribArray(attrib)
+	gl.VertexAttribPointer(attrib, size, vType, false, stride, gl.PtrOffset(offset))
+}
+
 // SetVec2 sets the VBO's data to the list of Vec2 (e.g. vertices)
 func (b *Buffer) SetVec2(vertices []mgl32.Vec2) {
 	buf := &bytes.Buffer{}

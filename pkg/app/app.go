@@ -19,12 +19,11 @@ const (
 type App struct {
 	window *glfw.Window
 
-	crosshair *util.Program
-	colorTri  *util.Program
-	yellowTri *util.Program
+	crosshair    *util.Program
+	crosshairVAO uint32
 
-	monkeyModel *util.Mesh
-	monkey      *util.Program
+	lighting *util.Lighting
+	backpack *util.Mesh
 
 	previousTime float64
 
@@ -39,7 +38,7 @@ type App struct {
 	projection mgl32.Mat4
 	camera     *util.Camera
 
-	colorTrans, yellowTrans, monkeyTrans mgl32.Mat4
+	backpackTrans mgl32.Mat4
 }
 
 // NewApp creates a new app for the window
@@ -47,9 +46,7 @@ func NewApp(w *glfw.Window) *App {
 	a := &App{
 		window: w,
 
-		colorTrans:  mgl32.Translate3D(0, 2, 0),
-		yellowTrans: mgl32.HomogRotate3DX(mgl32.DegToRad(-90)),
-		monkeyTrans: mgl32.Translate3D(3, 2, 0),
+		backpackTrans: mgl32.Translate3D(3, 2, 0),
 
 		fov:    45,
 		camera: util.NewCamera(mgl32.Vec3{0, 2, 5}, mgl32.Vec2{-90, 0}, true),
@@ -67,10 +64,12 @@ func (a *App) Setup() error {
 	a.window.SetCursorPosCallback(a.onCursorMove)
 
 	a.crosshair = util.NewProgram()
-	if err := a.crosshair.LinkFiles("assets/shaders/crosshair.vs", "assets/shaders/crosshair.fs"); err != nil {
+	if err := a.crosshair.LinkFiles("assets/shaders/crosshair.vs", "assets/shaders/white.fs"); err != nil {
 		return fmt.Errorf("failed to set up crosshair program: %w", err)
 	}
 
+	gl.GenVertexArrays(1, &a.crosshairVAO)
+	gl.BindVertexArray(a.crosshairVAO)
 	vertexBuf := util.NewBuffer(gl.ARRAY_BUFFER)
 	vertexBuf.SetVec2([]mgl32.Vec2{
 		{-1, 0},
@@ -79,68 +78,50 @@ func (a *App) Setup() error {
 		{0, -1},
 		{0, 1},
 	})
-	a.crosshair.LinkVertexPointer("vPosition", 2, gl.FLOAT, 0, vertexBuf, 0)
+	vertexBuf.LinkVertexPointer(a.crosshair, "frag_pos", 2, gl.FLOAT, 0, 0)
 
 	wi, hi := a.window.GetSize()
 	w := float32(wi)
 	h := float32(hi)
 	a.crosshair.SetUniformMat4("projection", mgl32.Ortho2D(0, w, 0, h))
-	a.crosshair.SetUniformMat4("model", mgl32.Translate3D(w/2, h/2, 0).Mul4(mgl32.Scale3D(10, 10, 1)))
-
-	a.colorTri = util.NewProgram()
-	if err := a.colorTri.LinkFiles("assets/shaders/color_3d.vs", "assets/shaders/color_tri.fs"); err != nil {
-		return fmt.Errorf("failed to set up color triangle program: %w", err)
-	}
-
-	vertexBuf = util.NewBuffer(gl.ARRAY_BUFFER)
-	vertexBuf.SetVec3([]mgl32.Vec3{
-		{-1, -1, 0},
-		{1, -1, 0},
-		{0, 0, 0},
-
-		{1, 1, 0},
-		{-1, 1, 0},
-		{0, 0, 0},
-	})
-	a.colorTri.LinkVertexPointer("vPosition", 3, gl.FLOAT, 0, vertexBuf, 0)
-
-	colorBuf := util.NewBuffer(gl.ARRAY_BUFFER)
-	colorBuf.SetVec4([]mgl32.Vec4{
-		{0, 1, 0, 1},
-		{1, 0, 0, 1},
-		{0, 0, 1, 1},
-
-		{1, 0, 0, 1},
-		{0, 0, 1, 1},
-		{0, 1, 0, 1},
-	})
-	a.colorTri.LinkVertexPointer("vColor", 4, gl.FLOAT, 0, colorBuf, 0)
-
-	a.yellowTri = util.NewProgram()
-	if err := a.yellowTri.LinkFiles("assets/shaders/yellow_3d.vs", "assets/shaders/yellow_tri.fs"); err != nil {
-		return fmt.Errorf("failed to set up yellow triangle program: %w", err)
-	}
-
-	vertexBuf = util.NewBuffer(gl.ARRAY_BUFFER)
-	vertexBuf.SetVec3([]mgl32.Vec3{
-		{-1, -1, 0},
-		{1, -1, 0},
-		{0, 1, 0},
-	})
-	a.yellowTri.LinkVertexPointer("vPosition", 3, gl.FLOAT, 0, vertexBuf, 0)
+	a.crosshair.SetUniformMat4("model", mgl32.Translate3D(w/2, h/2, 0).Mul4(mgl32.Scale3D(8, 8, 1)))
 
 	var err error
-	a.monkeyModel, err = util.NewMesh("assets/meshes/monkey.obj")
+	a.lighting, err = util.NewLightingVSFile("assets/shaders/model.vs", []*util.Lamp{
+		{
+			Position: mgl32.Vec3{-2, 5, -2},
+
+			Ambient:     mgl32.Vec3{0.01, 0.02, 0.04},
+			Diffuse:     mgl32.Vec3{0.2, 0.3, 0.7},
+			Specular:    mgl32.Vec3{0.18, 0.4, 0.83},
+			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
+		},
+		{
+			Position: mgl32.Vec3{6, 8, 5},
+
+			Ambient:     mgl32.Vec3{0.02, 0.05, 0.01},
+			Diffuse:     mgl32.Vec3{0.3, 0.8, 0.15},
+			Specular:    mgl32.Vec3{0.4, 1, 0.2},
+			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
+		},
+		{
+			Position: mgl32.Vec3{3, -4, 1},
+
+			Ambient:     mgl32.Vec3{0.05, 0.00, 0.0},
+			Diffuse:     mgl32.Vec3{0.8, 0.0, 0.0},
+			Specular:    mgl32.Vec3{1, 0, 0},
+			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize lighting: %w", err)
+	}
+
+	a.backpack, err = util.NewMesh("assets/meshes/backpack.obj")
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
-
-	a.monkey = util.NewProgram()
-	if err := a.monkey.LinkFiles("assets/shaders/model.vs", "assets/shaders/model.fs"); err != nil {
-		return fmt.Errorf("failed to set up monkey program: %w", err)
-	}
-
-	a.monkeyModel.UploadToProgram(a.monkey)
+	a.backpack.Upload(a.lighting.Shader)
 
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
@@ -220,25 +201,11 @@ func (a *App) readInputs() {
 func (a *App) draw() {
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	a.colorTri.Use()
-	a.colorTri.SetUniformMat4("projection", a.projection)
-	a.colorTri.SetUniformMat4("camera", a.camera.Transform())
-	a.colorTri.SetUniformMat4("model", a.colorTrans)
-	gl.DrawArrays(gl.TRIANGLES, 0, 6)
-
-	a.yellowTri.Use()
-	a.yellowTri.SetUniformMat4("projection", a.projection)
-	a.yellowTri.SetUniformMat4("camera", a.camera.Transform())
-	a.yellowTri.SetUniformMat4("model", a.yellowTrans)
-	gl.DrawArrays(gl.TRIANGLES, 0, 3)
-
-	a.monkey.Use()
-	a.monkey.SetUniformMat4("projection", a.projection)
-	a.monkey.SetUniformMat4("camera", a.camera.Transform())
-	a.monkey.SetUniformMat4("model", a.monkeyTrans)
-	gl.DrawElements(gl.TRIANGLES, int32(len(a.monkeyModel.Indices)), gl.UNSIGNED_INT, gl.PtrOffset(0))
+	a.backpack.Draw(a.lighting.Shader, a.projection, a.camera, a.backpackTrans)
+	a.lighting.DrawCubes(a.projection, a.camera)
 
 	a.crosshair.Use()
+	gl.BindVertexArray(a.crosshairVAO)
 	gl.DrawArrays(gl.LINES, 0, 4)
 
 	a.window.SwapBuffers()
