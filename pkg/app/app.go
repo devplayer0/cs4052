@@ -19,8 +19,7 @@ const (
 type App struct {
 	window *glfw.Window
 
-	crosshair    *util.Program
-	crosshairVAO uint32
+	crosshair *Crosshair
 
 	lighting *util.Lighting
 	backpack *util.Mesh
@@ -66,28 +65,11 @@ func (a *App) Setup() error {
 	a.window.SetKeyCallback(a.onKeyEvent)
 	a.window.SetCursorPosCallback(a.onCursorMove)
 
-	a.crosshair = util.NewProgram()
-	if err := a.crosshair.LinkFiles("assets/shaders/crosshair.vs", "assets/shaders/white.fs"); err != nil {
-		return fmt.Errorf("failed to set up crosshair program: %w", err)
+	var err error
+	a.crosshair, err = NewCrosshair(a.window)
+	if err != nil {
+		return fmt.Errorf("failed to set up crosshair: %w", err)
 	}
-
-	gl.GenVertexArrays(1, &a.crosshairVAO)
-	gl.BindVertexArray(a.crosshairVAO)
-	vertexBuf := util.NewBuffer(gl.ARRAY_BUFFER)
-	vertexBuf.SetVec2([]mgl32.Vec2{
-		{-1, 0},
-		{1, 0},
-
-		{0, -1},
-		{0, 1},
-	})
-	vertexBuf.LinkVertexPointer(a.crosshair, "frag_pos", 2, gl.FLOAT, 0, 0)
-
-	wi, hi := a.window.GetSize()
-	w := float32(wi)
-	h := float32(hi)
-	a.crosshair.SetUniformMat4("projection", mgl32.Ortho2D(0, w, 0, h))
-	a.crosshair.SetUniformMat4("model", mgl32.Translate3D(w/2, h/2, 0).Mul4(mgl32.Scale3D(8, 8, 1)))
 
 	a.brrLamp = util.Lamp{
 		Position: a.brrLampOrbit,
@@ -98,7 +80,6 @@ func (a *App) Setup() error {
 		Attenuation: util.AttenuationParams{1, 0.09, 0.032},
 	}
 
-	var err error
 	a.lighting, err = util.NewLightingVSFile("assets/shaders/model.vs", []*util.Lamp{
 		{
 			Position: mgl32.Vec3{-2, 5, -2},
@@ -209,11 +190,10 @@ func (a *App) draw() {
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 	a.backpack.Draw(a.lighting.Shader, a.projection, a.camera, a.backpackTrans)
+
 	a.lighting.DrawCubes(a.projection, a.camera)
 
-	a.crosshair.Use()
-	gl.BindVertexArray(a.crosshairVAO)
-	gl.DrawArrays(gl.LINES, 0, 4)
+	a.crosshair.Draw()
 
 	a.window.SwapBuffers()
 }
@@ -235,7 +215,7 @@ func (a *App) Update() {
 
 	a.readInputs()
 
-	brrLampTransform := util.TransFromPos(a.brrLampOrbit).Mul4(mgl32.HomogRotate3DY(a.brrLampAngle)).Mul4(mgl32.Translate3D(0, 0, -4))
+	brrLampTransform := util.TransFromPos(a.brrLampOrbit).Mul4(mgl32.HomogRotate3DY(a.brrLampAngle)).Mul4(mgl32.Translate3D(0, 0, -5))
 	a.brrLamp.Position = util.PosFromTrans(brrLampTransform)
 	a.lighting.Update()
 
