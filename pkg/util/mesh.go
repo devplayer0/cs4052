@@ -31,8 +31,8 @@ type Mesh struct {
 	VAO uint32
 }
 
-// NewMesh loads a mesh from a .obj file
-func NewMesh(objFile string) (*Mesh, error) {
+// NewOBJMesh loads a mesh from a .obj file
+func NewOBJMesh(objFile string) (*Mesh, error) {
 	f, err := os.Open(objFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open obj file %v: %w", objFile, err)

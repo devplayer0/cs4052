@@ -21,6 +21,7 @@ func TransFromPos(pos mgl32.Vec3) mgl32.Mat4 {
 	return mgl32.Translate3D(pos.X(), pos.Y(), pos.Z())
 }
 
+// PosFromTrans retrieves a position vector from a translation matrix
 func PosFromTrans(trans mgl32.Mat4) mgl32.Vec3 {
 	return trans.Col(3).Vec3()
 }

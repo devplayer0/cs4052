@@ -61,7 +61,7 @@ func setup() error {
 	yellowProg.LinkVertexPointer("vPosition", 3, gl.FLOAT, 0, vertexBuf, 0)
 
 	var err error
-	monkeyModel, err = util.NewMesh("assets/meshes/monkey.obj")
+	monkeyModel, err = util.NewOBJMesh("assets/meshes/monkey.obj")
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}

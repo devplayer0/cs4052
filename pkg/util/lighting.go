@@ -36,7 +36,7 @@ type Lighting struct {
 	cubeVAO    uint32
 	cubeShader *Program
 
-	Shader *Program
+	fragShader *Shader
 }
 
 func makeLightingFS(lamps []*Lamp) (*Shader, error) {
@@ -68,14 +68,10 @@ func makeLightingFS(lamps []*Lamp) (*Shader, error) {
 
 // NewLighting creates a new lighting shader from a given vertex shader and set
 // of lamps
-func NewLighting(vs *Shader, lamps []*Lamp) (*Lighting, error) {
+func NewLighting(lamps []*Lamp) (*Lighting, error) {
 	fs, err := makeLightingFS(lamps)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize fragment shader: %w", err)
-	}
-	prog := NewProgram()
-	if err := prog.Link(vs, fs); err != nil {
-		return nil, fmt.Errorf("failed to link shaders to program: %w", err)
 	}
 
 	cubeProg := NewProgram()
@@ -87,7 +83,7 @@ func NewLighting(vs *Shader, lamps []*Lamp) (*Lighting, error) {
 		lamps:      lamps,
 		cubeShader: cubeProg,
 
-		Shader: prog,
+		fragShader: fs,
 	}
 
 	gl.GenVertexArrays(1, &l.cubeVAO)
@@ -97,38 +93,46 @@ func NewLighting(vs *Shader, lamps []*Lamp) (*Lighting, error) {
 	cubeBuffer.SetVec3(cubeVertices)
 	cubeBuffer.LinkVertexPointer(cubeProg, "frag_pos", 3, gl.FLOAT, 0, 0)
 
-	l.Update()
-
 	return l, nil
 }
 
-// NewLightingVSFile is a convenience function that creates a new lighting
-// shader by compiling the vertex shader source file
-func NewLightingVSFile(vsFile string, lamps []*Lamp) (*Lighting, error) {
+// FragShader returns the fragment shader defined by this Lighting
+func (l *Lighting) FragShader() *Shader {
+	return l.fragShader
+}
+
+// ProgramVSFile is a convenience function which creates a new program with this
+// Lighting's fragment shader and the provided vertex shader file
+func (l *Lighting) ProgramVSFile(vsFile string) (*Program, error) {
 	vs, err := NewShaderFile(gl.VERTEX_SHADER, vsFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read vertex shader source: %w", err)
+		return nil, fmt.Errorf("failed to load: %w", err)
 	}
 	if err := vs.Compile(); err != nil {
-		return nil, fmt.Errorf("failed to compile vertex shader: %w", err)
+		return nil, fmt.Errorf("failed to compile: %w", err)
 	}
 
-	return NewLighting(vs, lamps)
+	p := NewProgram()
+	if err := p.Link(vs, l.fragShader); err != nil {
+		return nil, fmt.Errorf("failed to link shaders: %w", err)
+	}
+
+	return p, nil
 }
 
 // Update re-sets all of the lamp parameter uniforms
-func (l *Lighting) Update() {
+func (l *Lighting) Update(p *Program) {
 	for i, lamp := range l.lamps {
 		base := fmt.Sprintf("lamps[%v]", i)
 
-		l.Shader.SetUniformFloat32(base+".attenuation.constant", lamp.Attenuation.Constant)
-		l.Shader.SetUniformFloat32(base+".attenuation.linear", lamp.Attenuation.Linear)
-		l.Shader.SetUniformFloat32(base+".attenuation.quadratic", lamp.Attenuation.Quadratic)
+		p.SetUniformFloat32(base+".attenuation.constant", lamp.Attenuation.Constant)
+		p.SetUniformFloat32(base+".attenuation.linear", lamp.Attenuation.Linear)
+		p.SetUniformFloat32(base+".attenuation.quadratic", lamp.Attenuation.Quadratic)
 
-		l.Shader.SetUniformVec3(base+".position", lamp.Position)
-		l.Shader.SetUniformVec3(base+".ambient", lamp.Ambient)
-		l.Shader.SetUniformVec3(base+".diffuse", lamp.Diffuse)
-		l.Shader.SetUniformVec3(base+".specular", lamp.Specular)
+		p.SetUniformVec3(base+".position", lamp.Position)
+		p.SetUniformVec3(base+".ambient", lamp.Ambient)
+		p.SetUniformVec3(base+".diffuse", lamp.Diffuse)
+		p.SetUniformVec3(base+".specular", lamp.Specular)
 	}
 }
 

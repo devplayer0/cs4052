@@ -21,7 +21,10 @@ type App struct {
 
 	crosshair *Crosshair
 
-	lighting *util.Lighting
+	lighting   *util.Lighting
+	meshShader *util.Program
+
+	ground   *util.Mesh
 	backpack *util.Mesh
 
 	previousTime float64
@@ -37,10 +40,12 @@ type App struct {
 	projection mgl32.Mat4
 	camera     *util.Camera
 
-	brrLamp       util.Lamp
-	brrLampOrbit  mgl32.Vec3
-	brrLampAngle  float32
+	groundTrans   mgl32.Mat4
 	backpackTrans mgl32.Mat4
+
+	brrLamp      util.Lamp
+	brrLampOrbit mgl32.Vec3
+	brrLampAngle float32
 }
 
 // NewApp creates a new app for the window
@@ -48,11 +53,13 @@ func NewApp(w *glfw.Window) *App {
 	a := &App{
 		window: w,
 
-		brrLampOrbit:  mgl32.Vec3{3, 8, 1},
-		backpackTrans: mgl32.Translate3D(3, 2, 0),
-
 		fov:    45,
 		camera: util.NewCamera(mgl32.Vec3{0, 2, 10}, mgl32.Vec2{-90, 0}, true),
+
+		groundTrans:   mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32)).Mul4(mgl32.HomogRotate3DX(mgl32.DegToRad(90))),
+		backpackTrans: mgl32.Translate3D(3, 6, 0),
+
+		brrLampOrbit: mgl32.Vec3{3, 10, 1},
 	}
 	a.updateProjection()
 
@@ -74,15 +81,15 @@ func (a *App) Setup() error {
 	a.brrLamp = util.Lamp{
 		Position: a.brrLampOrbit,
 
-		Ambient:     mgl32.Vec3{0.05, 0.00, 0.0},
-		Diffuse:     mgl32.Vec3{0.8, 0.0, 0.0},
+		Ambient:     mgl32.Vec3{0.4, 0.00, 0.0},
+		Diffuse:     mgl32.Vec3{1.4, 0.0, 0.0},
 		Specular:    mgl32.Vec3{1, 0, 0},
 		Attenuation: util.AttenuationParams{1, 0.09, 0.032},
 	}
 
-	a.lighting, err = util.NewLightingVSFile("assets/shaders/model.vs", []*util.Lamp{
+	a.lighting, err = util.NewLighting([]*util.Lamp{
 		{
-			Position: mgl32.Vec3{-2, 5, -2},
+			Position: mgl32.Vec3{-2, 8, -2},
 
 			Ambient:     mgl32.Vec3{0.01, 0.02, 0.04},
 			Diffuse:     mgl32.Vec3{0.2, 0.3, 0.7},
@@ -90,7 +97,7 @@ func (a *App) Setup() error {
 			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
 		},
 		{
-			Position: mgl32.Vec3{6, -2, 5},
+			Position: mgl32.Vec3{6, 3, 5},
 
 			Ambient:     mgl32.Vec3{0.02, 0.05, 0.01},
 			Diffuse:     mgl32.Vec3{0.3, 0.8, 0.15},
@@ -103,11 +110,22 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to initialize lighting: %w", err)
 	}
 
-	a.backpack, err = util.NewMesh("assets/meshes/backpack.obj")
+	a.meshShader, err = a.lighting.ProgramVSFile("assets/shaders/mesh.vs")
+	if err != nil {
+		return fmt.Errorf("failed to link mesh shaders: %w", err)
+	}
+
+	a.ground, err = util.NewOBJMesh("assets/meshes/plane.obj")
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
-	a.backpack.Upload(a.lighting.Shader)
+	a.ground.Upload(a.meshShader)
+
+	a.backpack, err = util.NewOBJMesh("assets/meshes/backpack.obj")
+	if err != nil {
+		return fmt.Errorf("failed to load mesh: %w", err)
+	}
+	a.backpack.Upload(a.meshShader)
 
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LEQUAL)
@@ -189,7 +207,8 @@ func (a *App) readInputs() {
 func (a *App) draw() {
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	a.backpack.Draw(a.lighting.Shader, a.projection, a.camera, a.backpackTrans)
+	a.ground.Draw(a.meshShader, a.projection, a.camera, a.groundTrans)
+	a.backpack.Draw(a.meshShader, a.projection, a.camera, a.backpackTrans)
 
 	a.lighting.DrawCubes(a.projection, a.camera)
 
@@ -217,7 +236,7 @@ func (a *App) Update() {
 
 	brrLampTransform := util.TransFromPos(a.brrLampOrbit).Mul4(mgl32.HomogRotate3DY(a.brrLampAngle)).Mul4(mgl32.Translate3D(0, 0, -5))
 	a.brrLamp.Position = util.PosFromTrans(brrLampTransform)
-	a.lighting.Update()
+	a.lighting.Update(a.meshShader)
 
 	a.brrLampAngle += 4 * a.d
 	if a.brrLampAngle > 360 {
