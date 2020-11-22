@@ -90,7 +90,7 @@ func NewLighting(lamps []*Lamp) (*Lighting, error) {
 	gl.BindVertexArray(l.cubeVAO)
 	cubeBuffer := NewBuffer(gl.ARRAY_BUFFER)
 	cubeBuffer.Bind()
-	cubeBuffer.SetVec3(cubeVertices)
+	cubeBuffer.SetVec3(CubeVertices)
 	cubeBuffer.LinkVertexPointer(cubeProg, "frag_pos", 3, gl.FLOAT, 0, 0)
 
 	return l, nil

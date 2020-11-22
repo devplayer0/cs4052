@@ -15,6 +15,9 @@ import (
 // 32-bit float, (3 + 3 + 2)*4)
 const VertexSize = 32
 
+// MeshWireFrame when enabled, renders meshes in wireframe mode
+var MeshWireFrame = false
+
 // Vertex represents a vertex in a mesh (position, normal and UV coordinates)
 type Vertex struct {
 	Position mgl32.Vec3
@@ -25,29 +28,37 @@ type Vertex struct {
 
 // Mesh represents a mesh (indices and vertices)
 type Mesh struct {
-	Indices  []uint32
-	Vertices []Vertex
+	Indices   []uint32
+	Vertices  []Vertex
+	Transform mgl32.Mat4
 
-	VAO uint32
+	VAO          uint32
+	indexBuffer  *Buffer
+	vertexBuffer *Buffer
 }
 
-// NewOBJMesh loads a mesh from a .obj file
-func NewOBJMesh(objFile string) (*Mesh, error) {
+// ReadOBJFile reads and parses a Wavefront .obj file
+func ReadOBJFile(objFile string) (*obj.Object, error) {
 	f, err := os.Open(objFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open obj file %v: %w", objFile, err)
+		return nil, fmt.Errorf("failed to open file %v: %w", objFile, err)
 	}
 	defer f.Close()
 
-	o, err := obj.NewReader(f).Read()
+	obj, err := obj.NewReader(f).Read()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read obj: %w", err)
+		return nil, fmt.Errorf("failed to parse: %w", err)
 	}
 
+	return obj, nil
+}
+
+// NewOBJMesh creates a new mesh from a parsed OBJ
+func NewOBJMesh(obj *obj.Object, trans mgl32.Mat4) *Mesh {
 	var vertices []Vertex
 	var indices []uint32
 	var i uint32
-	for _, f := range o.Faces {
+	for _, f := range obj.Faces {
 		for _, p := range f.Points {
 			var uv mgl32.Vec2
 			if p.Texture != nil {
@@ -67,39 +78,60 @@ func NewOBJMesh(objFile string) (*Mesh, error) {
 	}
 
 	m := &Mesh{
-		Vertices: vertices,
-		Indices:  indices,
+		Vertices:  vertices,
+		Indices:   indices,
+		Transform: trans,
 	}
 
-	return m, nil
+	gl.GenVertexArrays(1, &m.VAO)
+	gl.BindVertexArray(m.VAO)
+
+	m.indexBuffer = NewBuffer(gl.ELEMENT_ARRAY_BUFFER)
+	m.vertexBuffer = NewBuffer(gl.ARRAY_BUFFER)
+
+	return m
 }
 
-// Upload uploads mesh data into buffers (vertex and element) attached to a new VAO
-func (m *Mesh) Upload(p *Program) {
-	gl.GenVertexArrays(1, &m.VAO)
+// NewOBJMeshFile loads a mesh from a .obj file
+func NewOBJMeshFile(objFile string, trans mgl32.Mat4) (*Mesh, error) {
+	obj, err := ReadOBJFile(objFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load obj: %w", err)
+	}
+
+	return NewOBJMesh(obj, trans), nil
+}
+
+// ReplaceVertices re-uploads mesh data into the vertex buffers
+func (m *Mesh) ReplaceVertices(p *Program, vertices []Vertex) {
+	gl.BindVertexArray(m.VAO)
+
+	buf := &bytes.Buffer{}
+	binary.Write(buf, nativeOrder, vertices)
+
+	m.vertexBuffer.SetData(buf.Bytes())
+}
+
+// Upload writes the index buffer and vertex buffer to the GPU
+func (m *Mesh) Upload(p *Program) *Mesh {
 	gl.BindVertexArray(m.VAO)
 
 	buf := &bytes.Buffer{}
 	binary.Write(buf, nativeOrder, m.Indices)
+	m.indexBuffer.SetData(buf.Bytes())
 
-	indexBuffer := NewBuffer(gl.ELEMENT_ARRAY_BUFFER)
-	indexBuffer.SetData(buf.Bytes())
+	m.vertexBuffer.LinkVertexPointer(p, "frag_pos", 3, gl.FLOAT, 32, 0)
+	m.vertexBuffer.LinkVertexPointer(p, "normal", 3, gl.FLOAT, 32, 12)
+	m.vertexBuffer.LinkVertexPointer(p, "uv", 2, gl.FLOAT, 32, 24)
 
-	buf = &bytes.Buffer{}
-	binary.Write(buf, nativeOrder, m.Vertices)
-
-	vertexBuffer := NewBuffer(gl.ARRAY_BUFFER)
-	vertexBuffer.SetData(buf.Bytes())
-
-	vertexBuffer.LinkVertexPointer(p, "frag_pos", 3, gl.FLOAT, 32, 0)
-	vertexBuffer.LinkVertexPointer(p, "normal", 3, gl.FLOAT, 32, 12)
-	vertexBuffer.LinkVertexPointer(p, "uv", 2, gl.FLOAT, 32, 24)
+	m.ReplaceVertices(p, m.Vertices)
+	return m
 }
 
 // Draw renders the mesh with the given shader and projection
 func (m *Mesh) Draw(p *Program, proj mgl32.Mat4, c *Camera, trans mgl32.Mat4) {
 	p.Use()
-	p.Project(proj, c, trans)
+	p.Project(proj, c, trans.Mul4(m.Transform))
 
 	// Hardcode to white for now
 	p.SetUniformVec3("in_color", mgl32.Vec3{1, 1, 1})
@@ -107,5 +139,9 @@ func (m *Mesh) Draw(p *Program, proj mgl32.Mat4, c *Camera, trans mgl32.Mat4) {
 	p.SetUniformFloat32("mat.spec_exponent", 64)
 
 	gl.BindVertexArray(m.VAO)
+	if MeshWireFrame {
+		gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
+	}
 	gl.DrawElements(gl.TRIANGLES, int32(len(m.Indices)), gl.UNSIGNED_INT, gl.PtrOffset(0))
+	gl.PolygonMode(gl.FRONT_AND_BACK, gl.FILL)
 }
