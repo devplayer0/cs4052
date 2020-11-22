@@ -103,7 +103,7 @@ func NewOBJMeshFile(objFile string, trans mgl32.Mat4) (*Mesh, error) {
 }
 
 // ReplaceVertices re-uploads mesh data into the vertex buffers
-func (m *Mesh) ReplaceVertices(p *Program, vertices []Vertex) {
+func (m *Mesh) ReplaceVertices(vertices []Vertex) {
 	gl.BindVertexArray(m.VAO)
 
 	buf := &bytes.Buffer{}
@@ -124,7 +124,7 @@ func (m *Mesh) Upload(p *Program) *Mesh {
 	m.vertexBuffer.LinkVertexPointer(p, "normal", 3, gl.FLOAT, 32, 12)
 	m.vertexBuffer.LinkVertexPointer(p, "uv", 2, gl.FLOAT, 32, 24)
 
-	m.ReplaceVertices(p, m.Vertices)
+	m.ReplaceVertices(m.Vertices)
 	return m
 }
 

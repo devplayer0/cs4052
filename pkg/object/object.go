@@ -197,7 +197,7 @@ func (o *Object) Draw(p *util.Program, proj mgl32.Mat4, cam *util.Camera, t floa
 			transformedVertices[i] = newVertex
 		}
 
-		m.Mesh.ReplaceVertices(p, transformedVertices)
+		m.Mesh.ReplaceVertices(transformedVertices)
 		m.Mesh.Draw(p, proj, cam, o.transform)
 	}
 }

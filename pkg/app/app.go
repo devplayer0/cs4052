@@ -54,7 +54,7 @@ type App struct {
 func NewApp(w *glfw.Window) *App {
 	a := &App{
 		window: w,
-		camera: util.NewCamera(mgl32.Vec3{0, 2, 10}, mgl32.Vec2{-90, 0}, true),
+		camera: util.NewCamera(mgl32.Vec3{0, 10, 11}, mgl32.Vec2{-90, -25}, true),
 
 		brrLampOrbit: mgl32.Vec3{3, 10, 1},
 

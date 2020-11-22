@@ -200,6 +200,9 @@ func makeScorpion(p *util.Program, dp *util.Program) (*object.Object, error) {
 	}, mgl32.Translate3D(-3, 2, 1), dp)
 
 	body, err := util.NewOBJMeshFile("assets/meshes/body.obj", mgl32.Ident4())
+	if err != nil {
+		return nil, err
+	}
 	body.Upload(p)
 
 	legObj, err := util.ReadOBJFile("assets/meshes/leg.obj")
