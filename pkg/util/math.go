@@ -65,6 +65,7 @@ func InterpolateMat4(a, b mgl32.Mat4, t float32) mgl32.Mat4 {
 	return interp
 }
 
+// QuatSlerp performs Spherical Linear Interpolation between q1 and q2
 func QuatSlerp(q1, q2 mgl32.Quat, amount float32) mgl32.Quat {
 	q1, q2 = q1.Normalize(), q2.Normalize()
 	dot := q1.Dot(q2)

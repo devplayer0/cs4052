@@ -1,10 +1,7 @@
 package util
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
-	"text/template"
 
 	"github.com/go-gl/gl/v4.6-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
@@ -39,39 +36,17 @@ type Lighting struct {
 	fragShader *Shader
 }
 
-func makeLightingFS(lamps []*Lamp) (*Shader, error) {
-	fsTemplateData, err := ioutil.ReadFile(lightingFragShaderFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read source file %v: %w", lightingFragShaderFile, err)
-	}
-	fsTemplate, err := template.New(lightingFragShaderFile).Parse(string(fsTemplateData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse template: %w", err)
-	}
-
-	fsSourceBuf := &bytes.Buffer{}
-	if err := fsTemplate.Execute(fsSourceBuf, struct {
-		Lamps []*Lamp
-	}{
-		Lamps: lamps,
-	}); err != nil {
-		return nil, fmt.Errorf("failed to execute template: %w", err)
-	}
-
-	fs := NewShader(gl.FRAGMENT_SHADER, fsSourceBuf.String())
-	if err := fs.Compile(); err != nil {
-		return nil, fmt.Errorf("failed to compile shader: %w", err)
-	}
-
-	return fs, nil
-}
-
 // NewLighting creates a new lighting shader from a given vertex shader and set
 // of lamps
 func NewLighting(lamps []*Lamp) (*Lighting, error) {
-	fs, err := makeLightingFS(lamps)
+	fs, err := NewShaderTemplateFile(gl.FRAGMENT_SHADER, lightingFragShaderFile, struct {
+		Lamps []*Lamp
+	}{lamps})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize fragment shader: %w", err)
+	}
+	if err := fs.Compile(); err != nil {
+		return nil, fmt.Errorf("failed to compile fragment shader: %w", err)
 	}
 
 	cubeProg := NewProgram()
