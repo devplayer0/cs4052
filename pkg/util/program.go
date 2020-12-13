@@ -122,6 +122,11 @@ func (p *Program) SetUniformMat4(n string, val mgl32.Mat4) {
 	gl.UniformMatrix4fv(p.Uniform(n), 1, false, &val[0])
 }
 
+// SetUniformMat4Slice sets a slice of mat4 uniform value
+func (p *Program) SetUniformMat4Slice(n string, val []mgl32.Mat4) {
+	gl.UniformMatrix4fv(p.Uniform(n), int32(len(val)), false, &val[0][0])
+}
+
 // Project sets the uniforms for the required 3D transformation matrices
 func (p *Program) Project(projection mgl32.Mat4, c *Camera, model mgl32.Mat4) {
 	p.SetUniformMat4("projection", projection)

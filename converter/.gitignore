@@ -1,0 +1,6 @@
+/*.o
+/convert
+/*.pb-c.*
+/*_pb2.py
+/__pycache__/
+/*.sobj

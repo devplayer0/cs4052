@@ -1,0 +1,107 @@
+syntax = "proto3";
+option go_package = "pkg/pb";
+
+message Vec2 {
+    float x = 1;
+    float y = 2;
+}
+message Vec3 {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+}
+message Vec4 {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+    float w = 4;
+}
+
+message Mat4 {
+    Vec4 a = 1;
+    Vec4 b = 2;
+    Vec4 c = 3;
+    Vec4 d = 4;
+}
+
+message Joint {
+    Mat4 inverseBind = 1;
+}
+
+message Vertex {
+    Vec3 position = 1;
+    Vec3 normal = 2;
+    Vec2 uv = 3;
+}
+// A triangle made up of 3 vertices (by index)
+message Triangle {
+    uint32 a = 1;
+    uint32 b = 2;
+    uint32 c = 3;
+}
+
+message VertexWeight {
+    // Vertex index (per mesh)
+    uint32 vertex = 1;
+    float weight = 2;
+}
+message VertexWeights {
+    repeated VertexWeight weights = 1;
+}
+message Mesh {
+    string name = 1;
+    repeated Vertex vertices = 2;
+    repeated Triangle faces = 3;
+    // Map from joint ID's to vertex weights
+    map<uint32, VertexWeights> weights = 4;
+}
+
+message Node {
+    string name = 1;
+    Mat4 transform = 2;
+    optional uint32 jointID = 3;
+
+    repeated uint32 children = 4;
+}
+
+// A Vec3 keyframe (e.g. position at a given time)
+message Vec3Key {
+    float time = 1;
+    Vec3 value = 2;
+}
+// A Vec4 keyframe (e.g. rotation quaternion at a given time)
+message Vec4Key {
+    float time = 1;
+    Vec4 value = 2;
+}
+
+// An animation channel (animation for a single node)
+message AnimChannel {
+    uint32 nodeID = 1;
+
+    repeated Vec3Key posFrames = 2;
+    repeated Vec4Key rotFrames = 3;
+    repeated Vec3Key scaleFrames = 4;
+}
+message Animation {
+    string name = 1;
+    // Animaton duration (in ticks)
+    float duration = 2;
+    // Ticks per second
+    float tps = 3;
+
+    repeated AnimChannel channels = 4;
+}
+
+message MeshInstance {
+    uint32 meshID = 1;
+    Mat4 transform = 2;
+}
+
+message Object {
+    repeated Mesh meshes = 1;
+    repeated Joint joints = 2;
+    repeated Node hierarchy = 3;
+    repeated Animation animations = 4;
+    repeated MeshInstance instances = 5;
+}

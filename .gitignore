@@ -1,2 +1,5 @@
 /bin/*
 !/bin/.gitkeep
+/.vscode/
+/pkg/pb/*
+!/pkg/pb/.gitkeep

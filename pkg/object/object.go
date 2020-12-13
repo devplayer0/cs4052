@@ -1,46 +1,138 @@
 package object
 
 import (
+	"fmt"
+	"io/ioutil"
+
+	"github.com/devplayer0/cs4052/pkg/pb"
 	"github.com/devplayer0/cs4052/pkg/util"
 	"github.com/go-gl/gl/v4.6-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
+	"google.golang.org/protobuf/proto"
 )
 
-var (
-	jointDebugShader *util.Program
-)
+type joint struct {
+	ID uint32
 
-type jointDebug struct {
+	InverseBind mgl32.Mat4
+}
+
+type vec3Key struct {
+	Time  float32
+	Value mgl32.Vec3
+}
+type quatKey struct {
+	Time  float32
+	Value mgl32.Quat
+}
+type nodeAnim struct {
+	Pos   []vec3Key
+	Rot   []quatKey
+	Scale []vec3Key
+}
+
+func (a nodeAnim) findPos(t float32) (vec3Key, vec3Key) {
+	for i := 0; i < len(a.Pos)-1; i++ {
+		if t < a.Pos[i+1].Time {
+			return a.Pos[i], a.Pos[i+1]
+		}
+	}
+
+	return a.Pos[0], a.Pos[0]
+}
+func (a nodeAnim) findRot(t float32) (quatKey, quatKey) {
+	for i := 0; i < len(a.Rot)-1; i++ {
+		if t < a.Rot[i+1].Time {
+			return a.Rot[i], a.Rot[i+1]
+		}
+	}
+
+	return a.Rot[0], a.Rot[0]
+}
+func (a nodeAnim) findScale(t float32) (vec3Key, vec3Key) {
+	for i := 0; i < len(a.Scale)-1; i++ {
+		if t < a.Scale[i+1].Time {
+			return a.Scale[i], a.Scale[i+1]
+		}
+	}
+
+	return a.Scale[0], a.Scale[0]
+}
+
+type nodeDebug struct {
 	vao uint32
 
-	boneVAO    uint32
-	boneBuffer *util.Buffer
+	pathVAO    uint32
+	pathBuffer *util.Buffer
 }
 
-// Joint represents a joint in the skeleton (hierarchical)
-type Joint struct {
-	Keyframes []mgl32.Mat4
+type node struct {
+	Name      string
+	Transform mgl32.Mat4
+	Joint     *joint
 
-	Path     string
-	Parent   *Joint
-	Children map[string]*Joint
+	Parent   *node
+	Children []*node
 
-	debug *jointDebug
+	debug *nodeDebug
 }
 
-// SetupHierarchy recursively wires up the path and parent
-func (j *Joint) SetupHierarchy() {
-	for n, c := range j.Children {
-		c.Path = j.Path + "." + n
-		c.Parent = j
-		c.SetupHierarchy()
+func buildNodeHierarchy(pb *pb.Object, cnid uint32, anims []*Animation, current *node) {
+	cn := pb.Hierarchy[cnid]
+	current.Name = cn.Name
+	current.Transform = util.PBMat4(cn.Transform)
+
+	if cn.JointID != nil {
+		current.Joint = &joint{
+			ID: *cn.JointID,
+
+			InverseBind: util.PBMat4(pb.Joints[*cn.JointID].InverseBind),
+		}
+	}
+	for i, a := range pb.Animations {
+		for _, c := range a.Channels {
+			if c.NodeID == cnid {
+				aChan := nodeAnim{}
+
+				aChan.Pos = make([]vec3Key, len(c.PosFrames))
+				for j, p := range c.PosFrames {
+					aChan.Pos[j] = vec3Key{
+						Time:  p.Time,
+						Value: util.PBVec3(p.Value),
+					}
+				}
+				aChan.Rot = make([]quatKey, len(c.RotFrames))
+				for j, r := range c.RotFrames {
+					aChan.Rot[j] = quatKey{
+						Time:  r.Time,
+						Value: util.PBQuat(r.Value),
+					}
+				}
+				aChan.Scale = make([]vec3Key, len(c.ScaleFrames))
+				for j, s := range c.ScaleFrames {
+					aChan.Scale[j] = vec3Key{
+						Time:  s.Time,
+						Value: util.PBVec3(s.Value),
+					}
+				}
+
+				anims[i].channels[current] = aChan
+			}
+		}
+	}
+
+	for _, ccnid := range cn.Children {
+		child := &node{
+			Parent: current,
+		}
+		current.Children = append(current.Children, child)
+
+		buildNodeHierarchy(pb, ccnid, anims, child)
 	}
 }
 
-// SetupDebug recursively generates VBO's for rendering the skeleton (joints and
-// bones)
-func (j *Joint) SetupDebug(p *util.Program) {
-	d := &jointDebug{}
+func (n *node) setupDebug(p *util.Program) {
+	d := &nodeDebug{}
 
 	gl.GenVertexArrays(1, &d.vao)
 	gl.BindVertexArray(d.vao)
@@ -49,81 +141,139 @@ func (j *Joint) SetupDebug(p *util.Program) {
 	cubeBuffer.SetVec3(util.CubeVertices)
 	cubeBuffer.LinkVertexPointer(p, "frag_pos", 3, gl.FLOAT, 0, 0)
 
-	gl.GenVertexArrays(1, &d.boneVAO)
-	gl.BindVertexArray(d.boneVAO)
-	d.boneBuffer = util.NewBuffer(gl.ARRAY_BUFFER)
-	d.boneBuffer.Bind()
-	d.boneBuffer.LinkVertexPointer(p, "frag_pos", 3, gl.FLOAT, 0, 0)
+	gl.GenVertexArrays(1, &d.pathVAO)
+	gl.BindVertexArray(d.pathVAO)
+	d.pathBuffer = util.NewBuffer(gl.ARRAY_BUFFER)
+	d.pathBuffer.Bind()
+	d.pathBuffer.LinkVertexPointer(p, "frag_pos", 3, gl.FLOAT, 0, 0)
 
-	j.debug = d
+	n.debug = d
 
-	for _, c := range j.Children {
-		c.SetupDebug(p)
+	for _, c := range n.Children {
+		c.setupDebug(p)
 	}
 }
 
-type jointDrawCallback func(j *Joint, parentTrans, localTrans, finalTrans mgl32.Mat4)
+type nodeTraverseCallback func(n *node, parent, local, final mgl32.Mat4)
 
-// Draw poses the skeleton recursively (with animation)
-func (j *Joint) Draw(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, t float32, cb jointDrawCallback) {
-	local := j.Keyframes[0]
+func (n *node) traverse(parent mgl32.Mat4, anim *Animation, t float32, cb nodeTraverseCallback) {
+	local := n.Transform
+	if anim != nil {
+		if aChan, ok := anim.channels[n]; ok {
+			pa, pb := aChan.findPos(t)
+			pFactor := (t - pa.Time) / (pb.Time - pa.Time)
+			pVec := pa.Value.Add(pb.Value.Sub(pa.Value).Mul(pFactor))
+			pos := mgl32.Translate3D(pVec.X(), pVec.Y(), pVec.Z())
 
-	// normalize time
-	t = t - util.Floor(t)
+			ra, rb := aChan.findRot(t)
+			rFactor := (t - ra.Time) / (rb.Time - ra.Time)
+			rot := util.QuatSlerp(ra.Value, rb.Value, rFactor).Normalize().Mat4()
 
-	approxFrame := t * float32(len(j.Keyframes)-1)
-	curFrame := util.Floor(approxFrame)
+			sa, sb := aChan.findScale(t)
+			sFactor := (t - sa.Time) / (sb.Time - sa.Time)
+			sVec := util.InterpolateVec3(sa.Value, sb.Value, sFactor)
+			scale := mgl32.Scale3D(sVec.X(), sVec.Y(), sVec.Z())
 
-	curFrameI := int(curFrame)
-	if curFrameI != len(j.Keyframes)-1 {
-		// how far (normalized) between two frames
-		interp := approxFrame - curFrame
-		local = util.InterpolateMat4(j.Keyframes[curFrameI], j.Keyframes[curFrameI+1], interp)
+			local = pos.Mul4(rot).Mul4(scale)
+		}
 	}
 
-	finalTrans := trans.Mul4(local)
-	cb(j, trans, local, finalTrans)
+	final := parent.Mul4(local)
+	cb(n, parent, local, final)
 
-	for _, c := range j.Children {
-		c.Draw(proj, cam, finalTrans, t, cb)
+	for _, c := range n.Children {
+		c.traverse(final, anim, t, cb)
 	}
 }
 
-// Mesh represents a mesh with bone vertex weights
-type Mesh struct {
-	Mesh *util.Mesh
+// Animation represents a skeletal animation
+type Animation struct {
+	Name     string
+	Duration float32
+	TPS      float32
 
-	VertexWeights map[string][]float32
+	channels map[*node]nodeAnim
 }
 
-// Object represents an object with many meshes and a skeleton
+type meshInstance struct {
+	Mesh      *Mesh
+	Transform mgl32.Mat4
+}
+
+// Object represents a multi-mesh hierarchical animation with skeletal animation
+// support
 type Object struct {
 	transform    mgl32.Mat4
 	invTransform mgl32.Mat4
+	program      *util.Program
+
+	meshes     []*Mesh
+	hierarchy  *node
+	Animations []*Animation
+	instances  []meshInstance
 
 	Debug       bool
 	debugShader *util.Program
-	Skeleton    *Joint
-	Meshes      map[string]*Mesh
 }
 
 // NewObject creates a new object
-func NewObject(s *Joint, t mgl32.Mat4, ds *util.Program) *Object {
+func NewObject(obj *pb.Object, t mgl32.Mat4, p, ds *util.Program) *Object {
 	o := &Object{
-		invTransform: t.Inv(),
+		program: p,
 
+		hierarchy: &node{},
+
+		Debug:       true,
 		debugShader: ds,
-		Skeleton:    s,
 	}
 	o.SetTransform(t)
 
-	o.Skeleton.Path = "root"
-	o.Skeleton.SetupHierarchy()
+	for _, m := range obj.Meshes {
+		cm := NewSOBJMesh(m)
+		cm.Upload(p)
+		o.meshes = append(o.meshes, cm)
+	}
+
+	for _, a := range obj.Animations {
+		ca := &Animation{
+			Name:     a.Name,
+			Duration: a.Duration,
+			TPS:      a.Tps,
+
+			channels: make(map[*node]nodeAnim),
+		}
+
+		o.Animations = append(o.Animations, ca)
+	}
+
+	buildNodeHierarchy(obj, 0, o.Animations, o.hierarchy)
 	if ds != nil {
-		o.Skeleton.SetupDebug(ds)
+		o.hierarchy.setupDebug(ds)
+	}
+
+	for _, i := range obj.Instances {
+		o.instances = append(o.instances, meshInstance{
+			Mesh:      o.meshes[i.MeshID],
+			Transform: util.PBMat4(i.Transform),
+		})
 	}
 
 	return o
+}
+
+// NewObjectFile creates a new object from a file
+func NewObjectFile(objFile string, t mgl32.Mat4, p, ds *util.Program) (*Object, error) {
+	data, err := ioutil.ReadFile(objFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	var obj pb.Object
+	if err := proto.Unmarshal(data, &obj); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	return NewObject(&obj, t, p, ds), nil
 }
 
 // GetTransform gets the object's transform
@@ -137,67 +287,44 @@ func (o *Object) SetTransform(t mgl32.Mat4) {
 	o.invTransform = o.transform.Inv()
 }
 
-// Draw poses the skeleton and calculates skin matrices (for every vertex of
-// every mesh) and finally renders each of the meshes (optionally rendering the
-// skeleton if debugging is enabled)
-func (o *Object) Draw(p *util.Program, proj mgl32.Mat4, cam *util.Camera, t float32) {
-	boneTransforms := map[string]mgl32.Mat4{}
+// Draw the object
+func (o *Object) Draw(p *util.Program, proj mgl32.Mat4, cam *util.Camera, anim *Animation, t float32) {
+	var aTime float32
+	if anim != nil {
+		aTime = util.Mod(t*anim.TPS, anim.Duration)
+	}
 
-	o.Skeleton.Draw(proj, cam, o.transform, t, func(j *Joint, parentTrans, localTrans, finalTrans mgl32.Mat4) {
-		// Use the inverted base transform since vertices will be transformed externally later
-		boneTransforms[j.Path] = o.invTransform.Mul4(finalTrans)
+	transforms := make([]mgl32.Mat4, MaxJoints)
+	o.hierarchy.traverse(o.transform, anim, aTime, func(n *node, parent, local, final mgl32.Mat4) {
+		if n.Joint != nil {
+			t := o.invTransform.Mul4(final).Mul4(n.Joint.InverseBind)
+			//t := mgl32.Ident4().Mul4(final).Mul4(n.Joint.InverseBind)
+			//t := mgl32.Translate3D(10, 10, 10)
+
+			transforms[n.Joint.ID] = t
+		}
 
 		if o.Debug && o.debugShader != nil {
 			o.debugShader.Use()
-			o.debugShader.Project(proj, cam, finalTrans.Mul4(mgl32.Scale3D(0.05, 0.05, 0.05)))
-			gl.BindVertexArray(j.debug.vao)
+			o.debugShader.Project(proj, cam, final.Mul4(mgl32.Scale3D(0.05, 0.05, 0.05)))
+			gl.BindVertexArray(n.debug.vao)
 			gl.DrawArrays(gl.TRIANGLES, 0, int32(len(util.CubeVertices)))
 
-			if j.Parent != nil {
-				o.debugShader.Project(proj, cam, parentTrans)
+			if n.Parent != nil {
+				o.debugShader.Project(proj, cam, parent)
 
-				gl.BindVertexArray(j.debug.boneVAO)
-				j.debug.boneBuffer.SetVec3([]mgl32.Vec3{
+				gl.BindVertexArray(n.debug.pathVAO)
+				n.debug.pathBuffer.SetVec3([]mgl32.Vec3{
 					{0, 0, 0},
-					util.PosFromTrans(localTrans),
+					util.PosFromTrans(local),
 				})
 				gl.DrawArrays(gl.LINES, 0, 2)
 			}
 		}
 	})
 
-	for _, m := range o.Meshes {
-		transformedVertices := make([]util.Vertex, len(m.Mesh.Vertices))
-		for i, v := range m.Mesh.Vertices {
-			newVertex := util.Vertex{
-				UV: v.UV,
-			}
-
-			var totalWeight float32
-			for jointName, weights := range m.VertexWeights {
-				weight := float32(1)
-				if len(weights) == 1 {
-					weight = weights[0]
-				} else if len(weights) != 0 {
-					weight = weights[i]
-				}
-
-				newVertex.Position = newVertex.Position.Add(boneTransforms[jointName].Mul4x1(v.Position.Vec4(1)).Mul(weight).Vec3())
-				newVertex.Normal = newVertex.Normal.Add(boneTransforms[jointName].Mul4x1(v.Normal.Vec4(1)).Mul(weight).Vec3())
-
-				totalWeight += weight
-			}
-
-			if totalWeight != 1 {
-				normWeight := 1 / totalWeight
-				newVertex.Position = newVertex.Position.Mul(normWeight)
-				newVertex.Normal = newVertex.Normal.Mul(normWeight)
-			}
-
-			transformedVertices[i] = newVertex
-		}
-
-		m.Mesh.ReplaceVertices(transformedVertices)
-		m.Mesh.Draw(p, proj, cam, o.transform)
+	p.SetUniformMat4Slice("joints", transforms)
+	for _, i := range o.instances {
+		i.Mesh.Draw(p, proj, cam, o.transform)
 	}
 }

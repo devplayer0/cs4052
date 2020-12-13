@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/devplayer0/cs4052/pkg/object"
-	"github.com/devplayer0/cs4052/pkg/util"
 	"github.com/go-gl/gl/v4.6-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
+
+	"github.com/devplayer0/cs4052/pkg/object"
+	"github.com/devplayer0/cs4052/pkg/util"
 )
 
 const (
@@ -22,13 +23,14 @@ type App struct {
 
 	crosshair *Crosshair
 
-	lighting       *util.Lighting
-	meshShader     *util.Program
-	skeletonShader *util.Program
+	lighting          *util.Lighting
+	meshShader        *util.Program
+	skinnedMeshShader *util.Program
+	skeletonShader    *util.Program
 
-	ground   *util.Mesh
-	backpack *util.Mesh
-	scorpion *object.Object
+	ground   *object.Mesh
+	backpack *object.Mesh
+	spider   *object.Object
 
 	previousTime  float64
 	animationTime float32
@@ -38,9 +40,8 @@ type App struct {
 	ocx, ocy  float64
 	d         float32
 
-	fov         float32
-	paused      bool
-	scorpionBrr bool
+	fov    float32
+	paused bool
 
 	projection mgl32.Mat4
 	camera     *util.Camera
@@ -58,9 +59,8 @@ func NewApp(w *glfw.Window) *App {
 
 		brrLampOrbit: mgl32.Vec3{3, 10, 1},
 
-		fov:         45,
-		paused:      true,
-		scorpionBrr: true,
+		fov:    45,
+		paused: false,
 	}
 
 	wi, hi := w.GetSize()
@@ -127,20 +127,22 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to link mesh shaders: %w", err)
 	}
 
-	a.ground, err = util.NewOBJMeshFile(
-		"assets/meshes/plane.obj",
-		mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32)).Mul4(mgl32.HomogRotate3DX(mgl32.DegToRad(90))),
-	)
+	a.ground, err = object.NewOBJMeshFile("assets/meshes/plane.obj")
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
 	a.ground.Upload(a.meshShader)
 
-	a.backpack, err = util.NewOBJMeshFile("assets/meshes/backpack.obj", mgl32.Translate3D(3, 6, 0))
+	a.backpack, err = object.NewOBJMeshFile("assets/meshes/backpack.obj")
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
 	a.backpack.Upload(a.meshShader)
+
+	a.skinnedMeshShader, err = a.lighting.ProgramVSFile("assets/shaders/mesh_skinned.vs")
+	if err != nil {
+		return fmt.Errorf("failed to link skinned mesh shaders: %w", err)
+	}
 
 	a.skeletonShader = util.NewProgram()
 	if err := a.skeletonShader.LinkFiles("assets/shaders/generic_3d.vs", "assets/shaders/uniform_color.fs"); err != nil {
@@ -148,9 +150,9 @@ func (a *App) Setup() error {
 	}
 	a.skeletonShader.SetUniformVec3("color", mgl32.Vec3{1, 0, 1})
 
-	a.scorpion, err = makeScorpion(a.meshShader, a.skeletonShader)
+	a.spider, err = object.NewObjectFile("assets/objects/scorpion.sobj", mgl32.Scale3D(1, 1, 1), a.skinnedMeshShader, a.skeletonShader)
 	if err != nil {
-		return fmt.Errorf("failed to initialize scorpion: %w", err)
+		return fmt.Errorf("failed to set up spider: %w", err)
 	}
 
 	gl.Enable(gl.DEPTH_TEST)
@@ -175,11 +177,9 @@ func (a *App) onKeyEvent(w *glfw.Window, key glfw.Key, scancode int, action glfw
 	if action == glfw.Release {
 		switch key {
 		case glfw.KeyM:
-			util.MeshWireFrame = !util.MeshWireFrame
+			object.MeshWireFrame = !object.MeshWireFrame
 		case glfw.KeyE:
-			a.scorpion.Debug = !a.scorpion.Debug
-		case glfw.KeyB:
-			a.scorpionBrr = !a.scorpionBrr
+			a.spider.Debug = !a.spider.Debug
 		case glfw.KeyP:
 			a.paused = !a.paused
 		}
@@ -230,10 +230,12 @@ func (a *App) readInputs() {
 func (a *App) draw() {
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	a.ground.Draw(a.meshShader, a.projection, a.camera, mgl32.Ident4())
-	a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Ident4())
+	a.ground.Draw(a.meshShader, a.projection, a.camera,
+		mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32)).Mul4(mgl32.HomogRotate3DX(mgl32.DegToRad(90))),
+	)
+	a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Translate3D(3, 6, 0))
 
-	a.scorpion.Draw(a.meshShader, a.projection, a.camera, a.animationTime)
+	a.spider.Draw(a.meshShader, a.projection, a.camera, a.spider.Animations[0], a.animationTime)
 
 	a.lighting.DrawCubes(a.projection, a.camera)
 
@@ -261,10 +263,6 @@ func (a *App) Update() {
 	}
 
 	a.readInputs()
-
-	if a.scorpionBrr {
-		a.scorpion.SetTransform(a.scorpion.GetTransform().Mul4(mgl32.HomogRotate3DY(a.d)))
-	}
 
 	brrLampTransform := util.TransFromPos(a.brrLampOrbit).Mul4(mgl32.HomogRotate3DY(a.brrLampAngle)).Mul4(mgl32.Translate3D(0, 0, -5))
 	a.brrLamp.Position = util.PosFromTrans(brrLampTransform)
