@@ -31,6 +31,22 @@ func NewShader(t uint32, source string) *Shader {
 	return s
 }
 
+// NewShaderTemplate creates a new OpenGL shader from source pre-processed as a
+// Go template
+func NewShaderTemplate(t uint32, source string, tplData interface{}) (*Shader, error) {
+	tpl, err := template.New("anonymous").Parse(source)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template: %w", err)
+	}
+
+	sourceBuf := &bytes.Buffer{}
+	if err := tpl.Execute(sourceBuf, tplData); err != nil {
+		return nil, fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return NewShader(t, sourceBuf.String()), nil
+}
+
 // NewShaderFile creates a new OpenGL shader from a source file
 func NewShaderFile(t uint32, sourceFile string) (*Shader, error) {
 	data, err := ioutil.ReadFile(sourceFile)
@@ -42,23 +58,14 @@ func NewShaderFile(t uint32, sourceFile string) (*Shader, error) {
 }
 
 // NewShaderTemplateFile creates a new OpenGL shader from a source file
-// pre-processed as Go template
+// pre-processed as a Go template
 func NewShaderTemplateFile(t uint32, sourceFile string, tplData interface{}) (*Shader, error) {
 	sourceData, err := ioutil.ReadFile(sourceFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read source file %v: %w", sourceFile, err)
 	}
-	tpl, err := template.New(sourceFile).Parse(string(sourceData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse template: %w", err)
-	}
 
-	sourceBuf := &bytes.Buffer{}
-	if err := tpl.Execute(sourceBuf, tplData); err != nil {
-		return nil, fmt.Errorf("failed to execute template: %w", err)
-	}
-
-	return NewShader(t, sourceBuf.String()), nil
+	return NewShaderTemplate(t, string(sourceData), tplData)
 }
 
 // Compile compiles the OpenGL shader

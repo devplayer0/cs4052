@@ -235,7 +235,7 @@ func (a *App) draw() {
 	)
 	a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Translate3D(3, 6, 0))
 
-	a.spider.Draw(a.meshShader, a.projection, a.camera, a.spider.Animations[0], a.animationTime)
+	a.spider.Draw(a.projection, a.camera, a.spider.Animations[0], a.animationTime)
 
 	a.lighting.DrawCubes(a.projection, a.camera)
 
@@ -266,7 +266,7 @@ func (a *App) Update() {
 
 	brrLampTransform := util.TransFromPos(a.brrLampOrbit).Mul4(mgl32.HomogRotate3DY(a.brrLampAngle)).Mul4(mgl32.Translate3D(0, 0, -5))
 	a.brrLamp.Position = util.PosFromTrans(brrLampTransform)
-	a.lighting.Update(a.meshShader)
+	a.lighting.Update(a.meshShader, a.skinnedMeshShader)
 
 	a.brrLampAngle += 4 * a.d
 	if a.brrLampAngle > 360 {

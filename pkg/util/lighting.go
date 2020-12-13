@@ -1,7 +1,10 @@
 package util
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
+	"text/template"
 
 	"github.com/go-gl/gl/v4.6-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
@@ -33,7 +36,7 @@ type Lighting struct {
 	cubeVAO    uint32
 	cubeShader *Program
 
-	fragShader *Shader
+	fragSource string
 }
 
 // NewLighting creates a new lighting shader from a given vertex shader and set
@@ -49,6 +52,21 @@ func NewLighting(lamps []*Lamp) (*Lighting, error) {
 		return nil, fmt.Errorf("failed to compile fragment shader: %w", err)
 	}
 
+	fsSourceData, err := ioutil.ReadFile(lightingFragShaderFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read fragment shader source file %v: %w", lightingFragShaderFile, err)
+	}
+	fsSourceTpl, err := template.New(lightingFragShaderFile).Parse(string(fsSourceData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse fragment shader template: %w", err)
+	}
+	fsSourceBuf := &bytes.Buffer{}
+	if err := fsSourceTpl.Execute(fsSourceBuf, struct {
+		Lamps []*Lamp
+	}{lamps}); err != nil {
+		return nil, fmt.Errorf("failed to execute template: %w", err)
+	}
+
 	cubeProg := NewProgram()
 	if err := cubeProg.LinkFiles("assets/shaders/generic_3d.vs", "assets/shaders/uniform_color.fs"); err != nil {
 		return nil, fmt.Errorf("failed to initialize lamp cube program: %w", err)
@@ -58,7 +76,7 @@ func NewLighting(lamps []*Lamp) (*Lighting, error) {
 		lamps:      lamps,
 		cubeShader: cubeProg,
 
-		fragShader: fs,
+		fragSource: fsSourceBuf.String(),
 	}
 
 	gl.GenVertexArrays(1, &l.cubeVAO)
@@ -71,13 +89,18 @@ func NewLighting(lamps []*Lamp) (*Lighting, error) {
 	return l, nil
 }
 
-// FragShader returns the fragment shader defined by this Lighting
-func (l *Lighting) FragShader() *Shader {
-	return l.fragShader
+// MakeFragShader creates a new fragment shader defined by this Lighting
+func (l *Lighting) MakeFragShader() (*Shader, error) {
+	fs := NewShader(gl.FRAGMENT_SHADER, l.fragSource)
+	if err := fs.Compile(); err != nil {
+		return nil, fmt.Errorf("failed to compile: %w", err)
+	}
+
+	return fs, nil
 }
 
-// ProgramVSFile is a convenience function which creates a new program with this
-// Lighting's fragment shader and the provided vertex shader file
+// ProgramVSFile is a convenience function which creates a new program with a
+// new Lighting fragment shader and the provided vertex shader file
 func (l *Lighting) ProgramVSFile(vsFile string) (*Program, error) {
 	vs, err := NewShaderFile(gl.VERTEX_SHADER, vsFile)
 	if err != nil {
@@ -87,8 +110,13 @@ func (l *Lighting) ProgramVSFile(vsFile string) (*Program, error) {
 		return nil, fmt.Errorf("failed to compile: %w", err)
 	}
 
+	fs, err := l.MakeFragShader()
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile fragment shader: %w", err)
+	}
+
 	p := NewProgram()
-	if err := p.Link(vs, l.fragShader); err != nil {
+	if err := p.Link(vs, fs); err != nil {
 		return nil, fmt.Errorf("failed to link shaders: %w", err)
 	}
 
@@ -96,18 +124,20 @@ func (l *Lighting) ProgramVSFile(vsFile string) (*Program, error) {
 }
 
 // Update re-sets all of the lamp parameter uniforms
-func (l *Lighting) Update(p *Program) {
-	for i, lamp := range l.lamps {
-		base := fmt.Sprintf("lamps[%v]", i)
+func (l *Lighting) Update(ps ...*Program) {
+	for _, p := range ps {
+		for i, lamp := range l.lamps {
+			base := fmt.Sprintf("lamps[%v]", i)
 
-		p.SetUniformFloat32(base+".attenuation.constant", lamp.Attenuation.Constant)
-		p.SetUniformFloat32(base+".attenuation.linear", lamp.Attenuation.Linear)
-		p.SetUniformFloat32(base+".attenuation.quadratic", lamp.Attenuation.Quadratic)
+			p.SetUniformFloat32(base+".attenuation.constant", lamp.Attenuation.Constant)
+			p.SetUniformFloat32(base+".attenuation.linear", lamp.Attenuation.Linear)
+			p.SetUniformFloat32(base+".attenuation.quadratic", lamp.Attenuation.Quadratic)
 
-		p.SetUniformVec3(base+".position", lamp.Position)
-		p.SetUniformVec3(base+".ambient", lamp.Ambient)
-		p.SetUniformVec3(base+".diffuse", lamp.Diffuse)
-		p.SetUniformVec3(base+".specular", lamp.Specular)
+			p.SetUniformVec3(base+".position", lamp.Position)
+			p.SetUniformVec3(base+".ambient", lamp.Ambient)
+			p.SetUniformVec3(base+".diffuse", lamp.Diffuse)
+			p.SetUniformVec3(base+".specular", lamp.Specular)
+		}
 	}
 }
 

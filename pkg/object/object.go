@@ -205,7 +205,7 @@ type meshInstance struct {
 type Object struct {
 	transform    mgl32.Mat4
 	invTransform mgl32.Mat4
-	program      *util.Program
+	shader       *util.Program
 
 	meshes     []*Mesh
 	hierarchy  *node
@@ -219,7 +219,7 @@ type Object struct {
 // NewObject creates a new object
 func NewObject(obj *pb.Object, t mgl32.Mat4, p, ds *util.Program) *Object {
 	o := &Object{
-		program: p,
+		shader: p,
 
 		hierarchy: &node{},
 
@@ -288,7 +288,7 @@ func (o *Object) SetTransform(t mgl32.Mat4) {
 }
 
 // Draw the object
-func (o *Object) Draw(p *util.Program, proj mgl32.Mat4, cam *util.Camera, anim *Animation, t float32) {
+func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, anim *Animation, t float32) {
 	var aTime float32
 	if anim != nil {
 		aTime = util.Mod(t*anim.TPS, anim.Duration)
@@ -297,11 +297,7 @@ func (o *Object) Draw(p *util.Program, proj mgl32.Mat4, cam *util.Camera, anim *
 	transforms := make([]mgl32.Mat4, MaxJoints)
 	o.hierarchy.traverse(o.transform, anim, aTime, func(n *node, parent, local, final mgl32.Mat4) {
 		if n.Joint != nil {
-			t := o.invTransform.Mul4(final).Mul4(n.Joint.InverseBind)
-			//t := mgl32.Ident4().Mul4(final).Mul4(n.Joint.InverseBind)
-			//t := mgl32.Translate3D(10, 10, 10)
-
-			transforms[n.Joint.ID] = t
+			transforms[n.Joint.ID] = o.invTransform.Mul4(final).Mul4(n.Joint.InverseBind)
 		}
 
 		if o.Debug && o.debugShader != nil {
@@ -323,8 +319,8 @@ func (o *Object) Draw(p *util.Program, proj mgl32.Mat4, cam *util.Camera, anim *
 		}
 	})
 
-	p.SetUniformMat4Slice("joints", transforms)
+	o.shader.SetUniformMat4Slice("joints", transforms)
 	for _, i := range o.instances {
-		i.Mesh.Draw(p, proj, cam, o.transform)
+		i.Mesh.Draw(o.shader, proj, cam, o.transform)
 	}
 }
