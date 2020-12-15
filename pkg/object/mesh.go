@@ -32,6 +32,10 @@ const WeightsSize = (MaxWeights + MaxWeights) * 4
 // MeshWireFrame when enabled, renders meshes in wireframe mode
 var MeshWireFrame = false
 
+// DisableNormalMapping when enabled, forces normal mapping to be disabled
+// (even in the presence of a normap map texture)
+var DisableNormalMapping = false
+
 var zeroVec3 = mgl32.Vec3{}
 
 // Vertex represents a vertex in a mesh (position, normal and UV coordinates)
@@ -339,7 +343,7 @@ func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl3
 			p.SetUniformVec3("m_specular_color", v3NonZero(m.Material.Specular))
 		}
 
-		if m.Material.NormalTexture != nil {
+		if !DisableNormalMapping && m.Material.NormalTexture != nil {
 			m.Material.NormalTexture.Activate(p, "tex_normal", 2)
 			p.SetUniformInt("normal_map", 1)
 		} else {

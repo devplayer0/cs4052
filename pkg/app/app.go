@@ -159,7 +159,7 @@ func (a *App) Setup() error {
 	a.ground.Upload(a.meshShader)
 
 	a.backpack, err = object.NewOBJMeshFile("assets/meshes/backpack.obj", &object.Material{
-		Diffuse:   mgl32.Vec3{0, 0.8, 0},
+		Diffuse:   mgl32.Vec3{0, 0.4, 0},
 		Specular:  mgl32.Vec3{0.1, 0.1, 0.1},
 		Emmissive: mgl32.Vec3{0, 0, 0},
 	})
@@ -179,7 +179,7 @@ func (a *App) Setup() error {
 	}
 	a.skeletonShader.SetUniformVec3("color", mgl32.Vec3{1, 0, 1})
 
-	a.spider, err = object.NewObjectFile("assets/objects/scorpion.sobj", mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(0.01, 0.01, 0.01)), a.skinnedMeshShader, a.skeletonShader)
+	a.spider, err = object.NewObjectFile("assets/objects/scorpion.sobj", mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(0.05, 0.05, 0.05)), a.skinnedMeshShader, a.skeletonShader)
 	if err != nil {
 		return fmt.Errorf("failed to set up spider: %w", err)
 	}
@@ -211,6 +211,8 @@ func (a *App) onKeyEvent(w *glfw.Window, key glfw.Key, scancode int, action glfw
 			a.spider.Debug = !a.spider.Debug
 		case glfw.KeyP:
 			a.paused = !a.paused
+		case glfw.KeyN:
+			object.DisableNormalMapping = !object.DisableNormalMapping
 		}
 	}
 
@@ -298,6 +300,8 @@ func (a *App) Update() {
 	a.brrLamp.Position = util.PosFromTrans(brrLampTransform)
 	a.spotlight.Position = a.camera.Position
 	a.spotlight.Direction = a.camera.Direction()
+
+	a.lighting.SetViewPos(a.camera.Position)
 	a.lighting.Update(a.meshShader, a.skinnedMeshShader)
 
 	a.brrLampAngle += 4 * a.d

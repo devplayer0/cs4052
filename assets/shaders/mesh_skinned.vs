@@ -43,7 +43,7 @@ void main() {
         vec3 B = cross(N, T);
         TBN = transpose(mat3(T, B, N));
     } else {
-        world_normal = normal_matrix * normal;
+        world_normal = normalize(normal_matrix * normal);
     }
 
     uv = uv_in;

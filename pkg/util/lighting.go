@@ -10,7 +10,7 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
-const lightingFragShaderFile = "assets/shaders/lighting_nmap.fs"
+const lightingFragShaderFile = "assets/shaders/lighting.fs"
 
 // AttenuationParams represents the lighting attenuation coefficients
 type AttenuationParams struct {
@@ -62,6 +62,7 @@ type fsTemplateData struct {
 
 // Lighting represents a shader to colour an object with lighting
 type Lighting struct {
+	viewPos    mgl32.Vec3
 	dirs       []*DirectionalLight
 	lamps      []*Lamp
 	spotlights []*Spotlight
@@ -147,9 +148,16 @@ func (l *Lighting) ProgramVSFile(vsFile string) (*Program, error) {
 	return p, nil
 }
 
+// SetViewPos sets the view position vector
+func (l *Lighting) SetViewPos(pos mgl32.Vec3) {
+	l.viewPos = pos
+}
+
 // Update re-sets all of the lamp parameter uniforms
 func (l *Lighting) Update(ps ...*Program) {
 	for _, p := range ps {
+		p.SetUniformVec3("view_pos", l.viewPos)
+
 		for i, spot := range l.spotlights {
 			base := fmt.Sprintf("spotlights[%v]", i)
 
@@ -167,6 +175,7 @@ func (l *Lighting) Update(ps ...*Program) {
 			p.SetUniformVec3(base+".diffuse", spot.Diffuse)
 			p.SetUniformVec3(base+".specular", spot.Specular)
 		}
+
 		for i, dir := range l.dirs {
 			base := fmt.Sprintf("dirs[%v]", i)
 
@@ -176,6 +185,7 @@ func (l *Lighting) Update(ps ...*Program) {
 			p.SetUniformVec3(base+".diffuse", dir.Diffuse)
 			p.SetUniformVec3(base+".specular", dir.Specular)
 		}
+
 		for i, lamp := range l.lamps {
 			base := fmt.Sprintf("lamps[%v]", i)
 

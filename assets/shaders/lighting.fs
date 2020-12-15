@@ -98,8 +98,8 @@ vec3 dir_phong(dir l, vec3 normal, vec3 view_dir) {
     return result;
 }
 
-vec3 lamp_phong(lamp l, vec3 lamp_pos, vec3 tangent_pos, vec3 normal, vec3 view_dir) {
-    vec3 lamp_dir = normalize(lamp_pos - tangent_pos);
+vec3 lamp_phong(lamp l, vec3 lamp_pos, vec3 pos, vec3 normal, vec3 view_dir) {
+    vec3 lamp_dir = normalize(lamp_pos - pos);
 
     // diffuse
     float diffuse = max(dot(normal, lamp_dir), 0.0);
@@ -120,8 +120,8 @@ vec3 lamp_phong(lamp l, vec3 lamp_pos, vec3 tangent_pos, vec3 normal, vec3 view_
     return result;
 }
 
-vec3 spotlight_phong(spotlight l, vec3 spot_pos, vec3 tangent_pos, vec3 normal, vec3 view_dir) {
-    vec3 spot_dir = normalize(spot_pos - tangent_pos);
+vec3 spotlight_phong(spotlight l, vec3 spot_pos, vec3 pos, vec3 normal, vec3 view_dir) {
+    vec3 spot_dir = normalize(spot_pos - pos);
     vec3 world_dir = normalize(l.position - world_pos);
 
     // diffuse
@@ -157,7 +157,7 @@ void main() {
         view_dir = normalize(TBN * view_pos - pos);
     } else {
         pos = world_pos;
-        normal = normalize(world_normal);
+        normal = world_normal;
         view_dir = normalize(view_pos - pos);
     }
 
@@ -167,12 +167,24 @@ void main() {
     }
     for (int i = 0; i < N_LAMPS; i++) {
         lamp l = lamps[i];
-        vec3 lamp_pos = TBN * l.position;
+
+        vec3 lamp_pos;
+        if (normal_map) {
+            lamp_pos = TBN * l.position;
+        } else {
+            lamp_pos = l.position;
+        }
         result += lamp_phong(l, lamp_pos, pos, normal, view_dir);
     }
     for (int i = 0; i < N_SPOTLIGHTS; i++) {
         spotlight l = spotlights[i];
-        vec3 spot_pos = TBN * l.position;
+
+        vec3 spot_pos;
+        if (normal_map) {
+            spot_pos = TBN * l.position;
+        } else {
+            spot_pos = l.position;
+        }
         result += spotlight_phong(l, spot_pos, pos, normal, view_dir);
     }
     result += emmissive_color();
