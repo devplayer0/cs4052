@@ -7,6 +7,7 @@
 #include <assimp/cfileio.h>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/material.h>
 
 void convert(const struct aiScene *scene) {
     for (size_t i = 0; i < scene->mNumAnimations; i++) {

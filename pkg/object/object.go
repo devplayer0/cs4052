@@ -196,8 +196,9 @@ type Animation struct {
 }
 
 type meshInstance struct {
-	Mesh      *Mesh
-	Transform mgl32.Mat4
+	Mesh         *Mesh
+	Transform    mgl32.Mat4
+	InvTransform mgl32.Mat4
 }
 
 // Object represents a multi-mesh hierarchical animation with skeletal animation
@@ -207,6 +208,7 @@ type Object struct {
 	invTransform mgl32.Mat4
 	shader       *util.Program
 
+	materials  []*Material
 	meshes     []*Mesh
 	hierarchy  *node
 	Animations []*Animation
@@ -217,19 +219,27 @@ type Object struct {
 }
 
 // NewObject creates a new object
-func NewObject(obj *pb.Object, t mgl32.Mat4, p, ds *util.Program) *Object {
+func NewObject(obj *pb.Object, t mgl32.Mat4, p, ds *util.Program) (*Object, error) {
 	o := &Object{
 		shader: p,
 
 		hierarchy: &node{},
 
-		Debug:       true,
 		debugShader: ds,
 	}
 	o.SetTransform(t)
 
+	for _, m := range obj.Materials {
+		mat, err := LoadSOBJMaterial(m)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load material %v: %w", m.Name, err)
+		}
+
+		o.materials = append(o.materials, mat)
+	}
+
 	for _, m := range obj.Meshes {
-		cm := NewSOBJMesh(m)
+		cm := NewSOBJMesh(m, o.materials[m.MaterialID])
 		cm.Upload(p)
 		o.meshes = append(o.meshes, cm)
 	}
@@ -252,13 +262,15 @@ func NewObject(obj *pb.Object, t mgl32.Mat4, p, ds *util.Program) *Object {
 	}
 
 	for _, i := range obj.Instances {
+		t := util.PBMat4(i.Transform)
 		o.instances = append(o.instances, meshInstance{
-			Mesh:      o.meshes[i.MeshID],
-			Transform: util.PBMat4(i.Transform),
+			Mesh:         o.meshes[i.MeshID],
+			Transform:    t,
+			InvTransform: t.Inv(),
 		})
 	}
 
-	return o
+	return o, nil
 }
 
 // NewObjectFile creates a new object from a file
@@ -273,7 +285,7 @@ func NewObjectFile(objFile string, t mgl32.Mat4, p, ds *util.Program) (*Object, 
 		return nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
-	return NewObject(&obj, t, p, ds), nil
+	return NewObject(&obj, t, p, ds)
 }
 
 // GetTransform gets the object's transform
@@ -319,8 +331,13 @@ func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, anim *Animation, t floa
 		}
 	})
 
-	o.shader.SetUniformMat4Slice("joints", transforms)
-	for _, i := range o.instances {
-		i.Mesh.Draw(o.shader, proj, cam, o.transform)
+	for _, in := range o.instances {
+		ts := make([]mgl32.Mat4, len(transforms))
+		for i, t := range transforms {
+			ts[i] = in.InvTransform.Mul4(t)
+		}
+
+		o.shader.SetUniformMat4Slice("joints", ts)
+		in.Mesh.Draw(o.shader, proj, cam, o.transform.Mul4(in.Transform))
 	}
 }

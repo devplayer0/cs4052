@@ -32,6 +32,8 @@ message Vertex {
     Vec3 position = 1;
     Vec3 normal = 2;
     Vec2 uv = 3;
+    Vec3 tangent = 4;
+    Vec3 bitangent = 5;
 }
 // A triangle made up of 3 vertices (by index)
 message Triangle {
@@ -54,6 +56,7 @@ message Mesh {
     repeated Triangle faces = 3;
     // Map from joint ID's to vertex weights
     map<uint32, VertexWeights> weights = 4;
+    uint32 materialID = 5;
 }
 
 message Node {
@@ -98,10 +101,24 @@ message MeshInstance {
     Mat4 transform = 2;
 }
 
+message Texture {
+    bytes data = 1;
+}
+message Material {
+    string name = 1;
+    float shininess = 2;
+
+    optional Texture diffuse = 3;
+    optional Texture specular = 4;
+    optional Texture normal = 5;
+    optional Texture emissive = 6;
+}
+
 message Object {
     repeated Mesh meshes = 1;
     repeated Joint joints = 2;
     repeated Node hierarchy = 3;
     repeated Animation animations = 4;
     repeated MeshInstance instances = 5;
+    repeated Material materials = 6;
 }

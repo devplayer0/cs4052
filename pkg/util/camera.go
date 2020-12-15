@@ -92,6 +92,11 @@ func (c *Camera) MoveZ(d float32) {
 	c.update()
 }
 
+// Direction returns the vector for the camera's direction
+func (c *Camera) Direction() mgl32.Vec3 {
+	return c.direction
+}
+
 // Transform returns the matrix for the camera
 func (c *Camera) Transform() mgl32.Mat4 {
 	return c.transform

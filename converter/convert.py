@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 import sys
 import os
+import io
 
 import numpy as np
 from google.protobuf import text_format
+from PIL import Image
 import pyassimp
 from pyassimp.postprocess import *
+from pyassimp.material import *
+
 import object_pb2 as pbobj
 
 class ConvertException(Exception):
@@ -25,10 +29,10 @@ def np_to_vec4(v4, np):
     v4.w = np[3]
 def np_to_quat(v4, np):
     # assimp orders quats differently...
-    v4.x = np[3]
-    v4.y = np[0]
-    v4.z = np[1]
-    v4.w = np[2]
+    v4.x = np[1]
+    v4.y = np[2]
+    v4.z = np[3]
+    v4.w = np[0]
 
 def np_to_mat4(m4, np):
     np_to_vec4(m4.a, np[0])
@@ -36,9 +40,18 @@ def np_to_mat4(m4, np):
     np_to_vec4(m4.c, np[2])
     np_to_vec4(m4.d, np[3])
 
+TEXTURE_ACCESSORS = {
+    aiTextureType_DIFFUSE:  lambda m: m.diffuse,
+    aiTextureType_SPECULAR: lambda m: m.specular,
+    aiTextureType_NORMALS:  lambda m: m.normal,
+    aiTextureType_EMISSIVE: lambda m: m.emissive,
+}
+
 class Converter:
-    def __init__(self, s):
+    def __init__(self, s, tex_map={}, skip_textures=False):
         self.scene = s
+        self.tex_map = tex_map
+        self.skip_textures = skip_textures
 
     def _flatten_all_nodes(self, n):
         self.simp_nodes[n.name] = n
@@ -78,21 +91,50 @@ class Converter:
 
     # Find meshes in the hierarchy and compile their transform
     def _find_instances(self, n, transform):
-        final = transform * n.transformation
+        final = n.transformation.dot(transform)
         for m in n.meshes:
             i = self.obj.instances.add()
-            i.meshID = self.mesh_name_id[m.name]
-            np_to_mat4(i.transform, n.transformation)
+            i.meshID = m._id
+            np_to_mat4(i.transform, final)
 
         for child in n.children:
             self._find_instances(child, final)
 
+    def load_texture(self, path):
+        if path in self.tex_map:
+            path = self.tex_map[path]
+
+        with Image.open(path) as img:
+            buf = io.BytesIO()
+            img.save(buf, format='png')
+
+            return buf.getvalue()
+
+    def _try_add_texture(self, cm, t, props):
+        if ('file', t) not in props:
+            return
+
+        print(f't: {t} path: {props["file", t]}', file=sys.stderr)
+        data = self.load_texture(props[('file', t)])
+        TEXTURE_ACCESSORS[t](cm).data = data
+
     def convert(self):
         self.obj = pbobj.Object()
 
-        self.mesh_name_id = {}
+        for m in self.scene.materials:
+            cm = self.obj.materials.add()
+            cm.name = m.properties['name']
+            if 'shininess' in m.properties:
+                cm.shininess = m.properties['shininess']
+
+            if not self.skip_textures:
+                for t in TEXTURE_ACCESSORS:
+                    self._try_add_texture(cm, t, m.properties)
+
         for i, m in enumerate(self.scene.meshes):
-            self.mesh_name_id[m.name] = i
+            # HACK: We won't be able to figure this out later when looking
+            # at a node
+            m._id = i
         self._find_instances(self.scene.rootnode, np.identity(4))
 
         self.simp_nodes = {}
@@ -101,8 +143,6 @@ class Converter:
         self.node_name_id = {}
         # Ensure the root node gets ID 0
         self._add_node(self.scene.rootnode)
-        # TODO: Why does the root node's transform seem to be messed up?
-        #np_to_mat4(self.obj.hierarchy[0].transform, np.identity(4))
 
         joint_name_id = {}
         for m in self.scene.meshes:
@@ -113,10 +153,13 @@ class Converter:
 
             cm = self.obj.meshes.add()
             cm.name = m.name
+            cm.materialID = m.materialindex
             for i, v in enumerate(m.vertices):
                 cv = cm.vertices.add()
                 np_to_vec3(cv.position, v)
                 np_to_vec3(cv.normal, m.normals[i])
+                np_to_vec3(cv.tangent, m.tangents[i])
+                np_to_vec3(cv.bitangent, m.bitangents[i])
 
                 if m.texturecoords is not None:
                     np_to_vec2(cv.uv, m.texturecoords[0][i])
@@ -189,14 +232,24 @@ def main():
         print(f'{sys.argv[0]} <file type>', file=sys.stderr)
         return 1
 
+    tex_pairs = os.getenv('SOBJ_TEX_MAP', '').split(',')
+    tex_map = {}
+    for pair in tex_pairs:
+        split_pair = pair.split('=')
+        if len(split_pair) != 2:
+            continue
+
+        tex_map[split_pair[0]] = split_pair[1]
+
     with pyassimp.load(sys.stdin.buffer, file_type=sys.argv[1], processing=
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_GenSmoothNormals      |
             aiProcess_SortByPType           |
+            aiProcess_FlipUVs               |
             aiProcess_CalcTangentSpace
         ) as scene:
-        converter = Converter(scene)
+        converter = Converter(scene, tex_map=tex_map, skip_textures=bool(os.getenv('SOBJ_SKIP_TEXTURES')))
         obj = converter.convert()
 
         if os.getenv('SOBJ_TEXT'):

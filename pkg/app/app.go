@@ -49,6 +49,8 @@ type App struct {
 	brrLamp      util.Lamp
 	brrLampOrbit mgl32.Vec3
 	brrLampAngle float32
+
+	spotlight util.Spotlight
 }
 
 // NewApp creates a new app for the window
@@ -82,23 +84,41 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to set up crosshair: %w", err)
 	}
 
+	att := util.AttenuationParams{Constant: 1, Linear: 0.09, Quadratic: 0.032}
 	a.brrLamp = util.Lamp{
 		Position: a.brrLampOrbit,
 
-		Ambient:     mgl32.Vec3{0.4, 0.00, 0.0},
+		Ambient:     mgl32.Vec3{0.4, 0.0, 0.0},
 		Diffuse:     mgl32.Vec3{1.4, 0.0, 0.0},
 		Specular:    mgl32.Vec3{1, 0, 0},
-		Attenuation: util.AttenuationParams{1, 0.09, 0.032},
+		Attenuation: att,
+	}
+	a.spotlight = util.Spotlight{
+		Cutoff:      util.Cos(mgl32.DegToRad(12.5)),
+		OuterCutoff: util.Cos(mgl32.DegToRad(15)),
+
+		Ambient:  mgl32.Vec3{0, 0, 0},
+		Diffuse:  mgl32.Vec3{1, 1, 1},
+		Specular: mgl32.Vec3{2, 2, 2},
+
+		Attenuation: att,
 	}
 
-	a.lighting, err = util.NewLighting([]*util.Lamp{
+	a.lighting, err = util.NewLighting([]*util.DirectionalLight{
+		{
+			Direction: mgl32.Vec3{-0.2, -1, -0.3},
+			Ambient:   mgl32.Vec3{0.05, 0.05, 0.05},
+			Diffuse:   mgl32.Vec3{0.7, 0.7, 0.7},
+			Specular:  mgl32.Vec3{0.5, 0.5, 0.5},
+		},
+	}, []*util.Lamp{
 		{
 			Position: mgl32.Vec3{-2, 8, -2},
 
 			Ambient:     mgl32.Vec3{0.01, 0.02, 0.04},
 			Diffuse:     mgl32.Vec3{0.2, 0.3, 0.7},
 			Specular:    mgl32.Vec3{0.18, 0.4, 0.83},
-			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
+			Attenuation: att,
 		},
 		{
 			Position: mgl32.Vec3{6, 3, 5},
@@ -106,7 +126,7 @@ func (a *App) Setup() error {
 			Ambient:     mgl32.Vec3{0.02, 0.05, 0.01},
 			Diffuse:     mgl32.Vec3{0.3, 0.8, 0.15},
 			Specular:    mgl32.Vec3{0.4, 1, 0.2},
-			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
+			Attenuation: att,
 		},
 		&a.brrLamp,
 		{
@@ -114,9 +134,11 @@ func (a *App) Setup() error {
 
 			Ambient:     mgl32.Vec3{0.05, 0.05, 0.05},
 			Diffuse:     mgl32.Vec3{0.8, 0.8, 0.8},
-			Specular:    mgl32.Vec3{1, 1, 1},
-			Attenuation: util.AttenuationParams{1, 0.09, 0.032},
+			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
+			Attenuation: att,
 		},
+	}, []*util.Spotlight{
+		&a.spotlight,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize lighting: %w", err)
@@ -127,13 +149,20 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to link mesh shaders: %w", err)
 	}
 
-	a.ground, err = object.NewOBJMeshFile("assets/meshes/plane.obj")
+	a.ground, err = object.NewOBJMeshFile("assets/meshes/plane.obj", &object.Material{
+		Diffuse:  mgl32.Vec3{0.3, 0.3, 0.3},
+		Specular: mgl32.Vec3{0.1, 0.1, 0.1},
+	})
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
 	a.ground.Upload(a.meshShader)
 
-	a.backpack, err = object.NewOBJMeshFile("assets/meshes/backpack.obj")
+	a.backpack, err = object.NewOBJMeshFile("assets/meshes/backpack.obj", &object.Material{
+		Diffuse:   mgl32.Vec3{0, 0.8, 0},
+		Specular:  mgl32.Vec3{0.1, 0.1, 0.1},
+		Emmissive: mgl32.Vec3{0, 0, 0},
+	})
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
@@ -150,7 +179,7 @@ func (a *App) Setup() error {
 	}
 	a.skeletonShader.SetUniformVec3("color", mgl32.Vec3{1, 0, 1})
 
-	a.spider, err = object.NewObjectFile("assets/objects/scorpion.sobj", mgl32.Scale3D(1, 1, 1), a.skinnedMeshShader, a.skeletonShader)
+	a.spider, err = object.NewObjectFile("assets/objects/scorpion.sobj", mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(0.01, 0.01, 0.01)), a.skinnedMeshShader, a.skeletonShader)
 	if err != nil {
 		return fmt.Errorf("failed to set up spider: %w", err)
 	}
@@ -235,7 +264,7 @@ func (a *App) draw() {
 	)
 	a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Translate3D(3, 6, 0))
 
-	a.spider.Draw(a.projection, a.camera, a.spider.Animations[0], a.animationTime)
+	a.spider.Draw(a.projection, a.camera, a.spider.Animations[4], a.animationTime)
 
 	a.lighting.DrawCubes(a.projection, a.camera)
 
@@ -257,6 +286,7 @@ func (a *App) Update() {
 		log.Printf("FOV: %v", a.fov)
 		log.Printf("Camera position: %v", a.camera.Position)
 		log.Printf("Camera rotation: %v", a.camera.Rotation())
+		log.Printf("Camera direction: %v", a.camera.Direction())
 
 		a.frames = 0
 		a.lastDebug = t
@@ -266,6 +296,8 @@ func (a *App) Update() {
 
 	brrLampTransform := util.TransFromPos(a.brrLampOrbit).Mul4(mgl32.HomogRotate3DY(a.brrLampAngle)).Mul4(mgl32.Translate3D(0, 0, -5))
 	a.brrLamp.Position = util.PosFromTrans(brrLampTransform)
+	a.spotlight.Position = a.camera.Position
+	a.spotlight.Direction = a.camera.Direction()
 	a.lighting.Update(a.meshShader, a.skinnedMeshShader)
 
 	a.brrLampAngle += 4 * a.d

@@ -22,7 +22,7 @@ func PBVec4(i *pb.Vec4) mgl32.Vec4 {
 
 // PBQuat converts an Object protobuf Vec4 to an mgl32.Quat
 func PBQuat(i *pb.Vec4) mgl32.Quat {
-	return mgl32.Quat{W: i.X, V: mgl32.Vec3{i.Y, i.Z, i.W}}
+	return mgl32.Quat{W: i.W, V: mgl32.Vec3{i.X, i.Y, i.Z}}
 }
 
 // PBMat4 converts an Object protobuf Mat4 to an mgl32.Mat4
