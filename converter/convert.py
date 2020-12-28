@@ -44,6 +44,7 @@ TEXTURE_ACCESSORS = {
     aiTextureType_DIFFUSE:  lambda m: m.diffuse,
     aiTextureType_SPECULAR: lambda m: m.specular,
     aiTextureType_NORMALS:  lambda m: m.normal,
+    aiTextureType_HEIGHT:   lambda m: m.normal,
     aiTextureType_EMISSIVE: lambda m: m.emissive,
 }
 

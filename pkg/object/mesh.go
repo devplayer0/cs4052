@@ -88,8 +88,8 @@ func LoadSOBJMaterial(m *pb.Material) (*Material, error) {
 	mat := &Material{
 		Shininess: m.Shininess,
 	}
-	if mat.Shininess < 16 {
-		mat.Shininess = 16
+	if mat.Shininess < 64 {
+		mat.Shininess = 64
 	}
 
 	var err error
@@ -104,6 +104,8 @@ func LoadSOBJMaterial(m *pb.Material) (*Material, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load specular texture: %w", err)
 		}
+	} else {
+		mat.Specular = mgl32.Vec3{0.3, 0.3, 0.3}
 	}
 	if m.Normal != nil {
 		mat.NormalTexture, err = loadSOBJTexture(m.Normal)

@@ -28,9 +28,11 @@ type App struct {
 	skinnedMeshShader *util.Program
 	skeletonShader    *util.Program
 
-	ground   *object.Mesh
-	backpack *object.Mesh
-	spider   *object.Object
+	ground    *object.Mesh
+	backpack  *object.Mesh
+	scorpion  *object.Object
+	tarantula *object.Object
+	locust    *object.Object
 
 	previousTime  float64
 	animationTime float32
@@ -51,6 +53,8 @@ type App struct {
 	brrLampAngle float32
 
 	spotlight util.Spotlight
+
+	boids *object.Boids
 }
 
 // NewApp creates a new app for the window
@@ -107,8 +111,8 @@ func (a *App) Setup() error {
 	a.lighting, err = util.NewLighting([]*util.DirectionalLight{
 		{
 			Direction: mgl32.Vec3{-0.2, -1, -0.3},
-			Ambient:   mgl32.Vec3{0.05, 0.05, 0.05},
-			Diffuse:   mgl32.Vec3{0.7, 0.7, 0.7},
+			Ambient:   mgl32.Vec3{0.1, 0.1, 0.1},
+			Diffuse:   mgl32.Vec3{1.7, 1.7, 1.7},
 			Specular:  mgl32.Vec3{0.5, 0.5, 0.5},
 		},
 	}, []*util.Lamp{
@@ -159,7 +163,7 @@ func (a *App) Setup() error {
 	a.ground.Upload(a.meshShader)
 
 	a.backpack, err = object.NewOBJMeshFile("assets/meshes/backpack.obj", &object.Material{
-		Diffuse:   mgl32.Vec3{0, 0.4, 0},
+		Diffuse:   mgl32.Vec3{0.1, 0.4, 0.1},
 		Specular:  mgl32.Vec3{0.1, 0.1, 0.1},
 		Emmissive: mgl32.Vec3{0, 0, 0},
 	})
@@ -179,9 +183,25 @@ func (a *App) Setup() error {
 	}
 	a.skeletonShader.SetUniformVec3("color", mgl32.Vec3{1, 0, 1})
 
-	a.spider, err = object.NewObjectFile("assets/objects/scorpion.sobj", mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(0.05, 0.05, 0.05)), a.skinnedMeshShader, a.skeletonShader)
+	a.scorpion, err = object.NewObjectFile("assets/objects/scorpion.sobj", a.skinnedMeshShader, a.skeletonShader)
 	if err != nil {
-		return fmt.Errorf("failed to set up spider: %w", err)
+		return fmt.Errorf("failed to set up scorpion: %w", err)
+	}
+	a.tarantula, err = object.NewObjectFile("assets/objects/tarantula.sobj", a.skinnedMeshShader, a.skeletonShader)
+	if err != nil {
+		return fmt.Errorf("failed to set up tarantula: %w", err)
+	}
+	a.locust, err = object.NewObjectFile("assets/objects/locust.sobj", a.skinnedMeshShader, a.skeletonShader)
+	if err != nil {
+		return fmt.Errorf("failed to set up locust: %w", err)
+	}
+
+	a.boids = object.NewBoids(util.Bounds{
+		Min: mgl32.Vec3{-32, 0, -32},
+		Max: mgl32.Vec3{32, 0, 32},
+	}, 0.5)
+	for i := 0; i < 64; i++ {
+		a.boids.Instances = append(a.boids.Instances, a.boids.MakeBoid())
 	}
 
 	gl.Enable(gl.DEPTH_TEST)
@@ -208,7 +228,7 @@ func (a *App) onKeyEvent(w *glfw.Window, key glfw.Key, scancode int, action glfw
 		case glfw.KeyM:
 			object.MeshWireFrame = !object.MeshWireFrame
 		case glfw.KeyE:
-			a.spider.Debug = !a.spider.Debug
+			a.scorpion.Debug = !a.scorpion.Debug
 		case glfw.KeyP:
 			a.paused = !a.paused
 		case glfw.KeyN:
@@ -264,9 +284,19 @@ func (a *App) draw() {
 	a.ground.Draw(a.meshShader, a.projection, a.camera,
 		mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32)).Mul4(mgl32.HomogRotate3DX(mgl32.DegToRad(90))),
 	)
-	a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Translate3D(3, 6, 0))
+	//a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Translate3D(3, 6, 0))
 
-	a.spider.Draw(a.projection, a.camera, a.spider.Animations[4], a.animationTime)
+	a.scorpion.Draw(a.projection, a.camera, mgl32.Translate3D(6, 0, 0).Mul4(mgl32.Scale3D(0.02, 0.02, 0.02)), a.scorpion.Animations[0], a.animationTime)
+	a.tarantula.Draw(a.projection, a.camera, mgl32.Translate3D(0, 1, -2).Mul4(mgl32.Scale3D(0.04, 0.04, 0.04)), nil, a.animationTime)
+	a.locust.Draw(a.projection, a.camera, mgl32.Translate3D(-8, 1, -2).Mul4(mgl32.Scale3D(0.01, 0.01, 0.01)), nil, a.animationTime)
+
+	scorpionBase := mgl32.Scale3D(0.01, 0.01, 0.01)
+	for _, b := range a.boids.Instances {
+		p := mgl32.Vec3{b.Position.X(), 0, b.Position.Z()}
+		angle := util.Atan2(p.Z(), p.X())
+		trans := mgl32.Translate3D(p.X(), 0, p.Z()).Mul4(mgl32.HomogRotate3DY(angle)).Mul4(scorpionBase)
+		a.scorpion.Draw(a.projection, a.camera, trans, a.scorpion.Animations[4], a.animationTime)
+	}
 
 	a.lighting.DrawCubes(a.projection, a.camera)
 
@@ -281,6 +311,7 @@ func (a *App) Update() {
 	a.d = float32(t - a.previousTime)
 	if !a.paused {
 		a.animationTime += float32(a.d)
+		a.boids.Update()
 	}
 
 	if t-a.lastDebug > 1 {

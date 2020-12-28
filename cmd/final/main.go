@@ -28,7 +28,7 @@ func main() {
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 
 	var err error
-	window, err := glfw.CreateWindow(800, 600, "Final", nil, nil)
+	window, err := glfw.CreateWindow(1024, 768, "Final", nil, nil)
 	if err != nil {
 		log.Fatalf("Failed to create window: %v", err)
 	}

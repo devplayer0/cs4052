@@ -2,6 +2,7 @@ package util
 
 import (
 	"math"
+	"math/rand"
 
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -24,6 +25,10 @@ func Sin(x float32) float32 {
 // Cos calculates single precision cos()
 func Cos(x float32) float32 {
 	return float32(math.Cos(float64(x)))
+}
+
+func Atan2(y, x float32) float32 {
+	return float32(math.Atan2(float64(y), float64(x)))
 }
 
 // Mod returns floating point remainder of x / y
@@ -89,4 +94,15 @@ func QuatSlerp(q1, q2 mgl32.Quat, amount float32) mgl32.Quat {
 	rel := q2.Sub(q1.Scale(dot)).Normalize()
 
 	return q1.Scale(c).Add(rel.Scale(s))
+}
+
+// Bounds represents a 3D box
+type Bounds struct {
+	Min mgl32.Vec3
+	Max mgl32.Vec3
+}
+
+// RandVec3 returns a Vec3 with random components
+func RandVec3() mgl32.Vec3 {
+	return mgl32.Vec3{rand.Float32(), rand.Float32(), rand.Float32()}
 }

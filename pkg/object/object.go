@@ -204,9 +204,7 @@ type meshInstance struct {
 // Object represents a multi-mesh hierarchical animation with skeletal animation
 // support
 type Object struct {
-	transform    mgl32.Mat4
-	invTransform mgl32.Mat4
-	shader       *util.Program
+	shader *util.Program
 
 	materials  []*Material
 	meshes     []*Mesh
@@ -219,7 +217,7 @@ type Object struct {
 }
 
 // NewObject creates a new object
-func NewObject(obj *pb.Object, t mgl32.Mat4, p, ds *util.Program) (*Object, error) {
+func NewObject(obj *pb.Object, p, ds *util.Program) (*Object, error) {
 	o := &Object{
 		shader: p,
 
@@ -227,7 +225,6 @@ func NewObject(obj *pb.Object, t mgl32.Mat4, p, ds *util.Program) (*Object, erro
 
 		debugShader: ds,
 	}
-	o.SetTransform(t)
 
 	for _, m := range obj.Materials {
 		mat, err := LoadSOBJMaterial(m)
@@ -274,7 +271,7 @@ func NewObject(obj *pb.Object, t mgl32.Mat4, p, ds *util.Program) (*Object, erro
 }
 
 // NewObjectFile creates a new object from a file
-func NewObjectFile(objFile string, t mgl32.Mat4, p, ds *util.Program) (*Object, error) {
+func NewObjectFile(objFile string, p, ds *util.Program) (*Object, error) {
 	data, err := ioutil.ReadFile(objFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -285,31 +282,21 @@ func NewObjectFile(objFile string, t mgl32.Mat4, p, ds *util.Program) (*Object, 
 		return nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
-	return NewObject(&obj, t, p, ds)
-}
-
-// GetTransform gets the object's transform
-func (o *Object) GetTransform() mgl32.Mat4 {
-	return o.transform
-}
-
-// SetTransform sets the object's transform
-func (o *Object) SetTransform(t mgl32.Mat4) {
-	o.transform = t
-	o.invTransform = o.transform.Inv()
+	return NewObject(&obj, p, ds)
 }
 
 // Draw the object
-func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, anim *Animation, t float32) {
+func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, anim *Animation, t float32) {
 	var aTime float32
 	if anim != nil {
 		aTime = util.Mod(t*anim.TPS, anim.Duration)
 	}
 
+	invTrans := trans.Inv()
 	transforms := make([]mgl32.Mat4, MaxJoints)
-	o.hierarchy.traverse(o.transform, anim, aTime, func(n *node, parent, local, final mgl32.Mat4) {
+	o.hierarchy.traverse(trans, anim, aTime, func(n *node, parent, local, final mgl32.Mat4) {
 		if n.Joint != nil {
-			transforms[n.Joint.ID] = o.invTransform.Mul4(final).Mul4(n.Joint.InverseBind)
+			transforms[n.Joint.ID] = invTrans.Mul4(final).Mul4(n.Joint.InverseBind)
 		}
 
 		if o.Debug && o.debugShader != nil {
@@ -338,6 +325,6 @@ func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, anim *Animation, t floa
 		}
 
 		o.shader.SetUniformMat4Slice("joints", ts)
-		in.Mesh.Draw(o.shader, proj, cam, o.transform.Mul4(in.Transform))
+		in.Mesh.Draw(o.shader, proj, cam, trans.Mul4(in.Transform))
 	}
 }
