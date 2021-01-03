@@ -27,6 +27,7 @@ func Cos(x float32) float32 {
 	return float32(math.Cos(float64(x)))
 }
 
+// Atan2 calculates single precision atan2()
 func Atan2(y, x float32) float32 {
 	return float32(math.Atan2(float64(y), float64(x)))
 }

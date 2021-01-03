@@ -286,7 +286,7 @@ func NewObjectFile(objFile string, p, ds *util.Program) (*Object, error) {
 }
 
 // Draw the object
-func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, anim *Animation, t float32) {
+func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, envMap *util.Texture, anim *Animation, t float32) {
 	var aTime float32
 	if anim != nil {
 		aTime = util.Mod(t*anim.TPS, anim.Duration)
@@ -325,6 +325,6 @@ func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, anim 
 		}
 
 		o.shader.SetUniformMat4Slice("joints", ts)
-		in.Mesh.Draw(o.shader, proj, cam, trans.Mul4(in.Transform))
+		in.Mesh.Draw(o.shader, proj, cam, trans.Mul4(in.Transform), envMap)
 	}
 }

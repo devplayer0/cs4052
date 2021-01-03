@@ -319,18 +319,19 @@ func (a *App) draw() {
 
 	a.ground.Draw(a.meshShader, a.projection, a.camera,
 		mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32)).Mul4(mgl32.HomogRotate3DX(mgl32.DegToRad(90))),
+		a.skybox.Texture,
 	)
-	//a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Translate3D(3, 6, 0))
+	a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Translate3D(7, 4, -8), a.skybox.Texture)
 
-	a.scorpion.Draw(a.projection, a.camera, mgl32.Translate3D(6, 0, 0).Mul4(mgl32.Scale3D(0.02, 0.02, 0.02)), a.scorpion.Animations[0], a.animationTime)
-	a.tarantula.Draw(a.projection, a.camera, mgl32.Translate3D(0, 1, -2).Mul4(mgl32.Scale3D(0.04, 0.04, 0.04)), nil, a.animationTime)
-	a.locust.Draw(a.projection, a.camera, mgl32.Translate3D(-8, 1, -2).Mul4(mgl32.Scale3D(0.01, 0.01, 0.01)), nil, a.animationTime)
+	a.scorpion.Draw(a.projection, a.camera, mgl32.Translate3D(6, 0, 0).Mul4(mgl32.Scale3D(0.02, 0.02, 0.02)), a.skybox.Texture, a.scorpion.Animations[0], a.animationTime)
+	a.tarantula.Draw(a.projection, a.camera, mgl32.Translate3D(0, 1, -2).Mul4(mgl32.Scale3D(0.04, 0.04, 0.04)), a.skybox.Texture, nil, a.animationTime)
+	a.locust.Draw(a.projection, a.camera, mgl32.Translate3D(-8, 1, -2).Mul4(mgl32.Scale3D(0.01, 0.01, 0.01)), a.skybox.Texture, nil, a.animationTime)
 
 	scorpionBase := mgl32.Scale3D(0.01, 0.01, 0.01)
 	for _, b := range a.boids.Instances {
 		angle := util.Atan2(b.Velocity.Z(), b.Velocity.X())
 		trans := mgl32.Translate3D(b.Position.X(), 0, b.Position.Z()).Mul4(mgl32.HomogRotate3DY(angle)).Mul4(scorpionBase)
-		a.scorpion.Draw(a.projection, a.camera, trans, a.scorpion.Animations[4], a.animationTime)
+		a.scorpion.Draw(a.projection, a.camera, trans, a.skybox.Texture, a.scorpion.Animations[4], a.animationTime)
 	}
 
 	a.lighting.DrawCubes(a.projection, a.camera)

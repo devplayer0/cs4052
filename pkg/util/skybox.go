@@ -21,7 +21,7 @@ var cubeSides = map[string]uint32{
 
 // Skybox represents a cube-mapped skybox
 type Skybox struct {
-	texture *Texture
+	Texture *Texture
 	shader  *Program
 	vao     uint32
 }
@@ -55,7 +55,7 @@ func NewSkybox(pathBase string) (*Skybox, error) {
 	}
 
 	s := &Skybox{
-		texture: t,
+		Texture: t,
 		shader:  shader,
 	}
 	gl.GenVertexArrays(1, &s.vao)
@@ -77,7 +77,7 @@ func (s *Skybox) Draw(proj mgl32.Mat4, c *Camera) {
 	// to the buffer's content (see also vertex shader)
 	gl.DepthFunc(gl.LEQUAL)
 
-	s.texture.Activate(s.shader, "skybox", 0)
+	s.Texture.Activate(s.shader, "skybox", 0)
 
 	s.shader.Use()
 	s.shader.SetUniformMat4("projection", proj)

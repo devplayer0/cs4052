@@ -325,12 +325,9 @@ func v3NonZero(v mgl32.Vec3) mgl32.Vec3 {
 }
 
 // Draw renders the mesh with the given shader and projection
-func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl32.Mat4) {
+func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl32.Mat4, envMap *util.Texture) {
 	p.Use()
 	p.Project(proj, c, trans)
-
-	// Hardcode to white for now
-	p.SetUniformVec3("in_color", mgl32.Vec3{1, 1, 1})
 
 	if m.Material != nil {
 		if m.Material.DiffuseTexture != nil {
@@ -362,6 +359,8 @@ func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl3
 	} else {
 		p.SetUniformFloat32("shininess", 16)
 	}
+
+	envMap.Activate(p, "env_map", 4)
 
 	gl.BindVertexArray(m.VAO)
 	if MeshWireFrame {

@@ -51,7 +51,7 @@ layout(binding = 0) uniform sampler2D tex_diffuse;
 layout(binding = 1) uniform sampler2D tex_specular;
 layout(binding = 2) uniform sampler2D tex_normal;
 layout(binding = 3) uniform sampler2D tex_emmissive;
-layout(binding = 4) uniform samplerCube skybox;
+layout(binding = 4) uniform samplerCube env_map;
 uniform float shininess;
 
 float get_attenuation(attenuation_params p, float dist) {
@@ -70,7 +70,7 @@ vec3 specular_color() {
         return m_specular_color;
     }
 
-    return vec3(texture(tex_specular, uv).a);
+    return texture(tex_specular, uv).rgb;
     //return vec3(0.5);
 }
 vec3 emmissive_color() {
@@ -149,6 +149,11 @@ vec3 spotlight_phong(spotlight l, vec3 spot_pos, vec3 pos, vec3 normal, vec3 vie
     return result;
 }
 
+vec3 env_reflections(vec3 pos, vec3 normal, vec3 view_dir) {
+    vec3 r = reflect(-view_dir, normal);
+    return texture(env_map, r).rgb * 0.3;
+}
+
 void main() {
     vec3 pos, normal, view_dir;
 
@@ -188,7 +193,9 @@ void main() {
         }
         result += spotlight_phong(l, spot_pos, pos, normal, view_dir);
     }
+
     result += emmissive_color();
+    result += env_reflections(pos, normal, view_dir);
 
     out_color = vec4(result, 1.0);
 }
