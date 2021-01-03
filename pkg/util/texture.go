@@ -2,10 +2,8 @@ package util
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"image"
-	"image/color"
+	"image/jpeg"
 	"image/png"
 
 	"github.com/go-gl/gl/v4.6-core/gl"
@@ -52,30 +50,54 @@ func (t *Texture) SetIParameter(param uint32, value int32) {
 }
 
 // SetData2D uploads 2D pixel data to the texture on the GPU
-func (t *Texture) SetData2D(level, internalformat, width, height, border int32, format, xtype uint32, pixels []byte) {
+func (t *Texture) SetData2D(target uint32, level, internalformat, width, height, border int32, format, xtype uint32, pixels []byte) {
 	t.Bind()
-	gl.TexImage2D(t.ty, level, internalformat, width, height, border, format, xtype, gl.Ptr(pixels))
+	gl.TexImage2D(target, level, internalformat, width, height, border, format, xtype, gl.Ptr(pixels))
 }
 
 // LoadPNG decodes a PNG and uploads it to the texture on the GPU
-func (t *Texture) LoadPNG(data []byte) error {
+func (t *Texture) LoadPNG(target uint32, data []byte) error {
 	img, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to decode: %w", err)
 	}
 
-	var pixels []byte
-	switch img.ColorModel() {
-	case color.RGBAModel:
-		pixels = img.(*image.RGBA).Pix
-	case color.NRGBAModel:
-		pixels = img.(*image.NRGBA).Pix
-	default:
-		return errors.New("unknown color model")
+	b := img.Bounds()
+	size := b.Max.Sub(b.Min)
+	pixels := make([]byte, size.X*size.Y*4)
+	for x := 0; x < size.X; x++ {
+		for y := 0; y < size.Y; y++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			pixels[0+(x*4)+(y*4*size.X)] = byte(r >> 8)
+			pixels[1+(x*4)+(y*4*size.X)] = byte(g >> 8)
+			pixels[2+(x*4)+(y*4*size.X)] = byte(b >> 8)
+			pixels[3+(x*4)+(y*4*size.X)] = byte(a >> 8)
+		}
+	}
+
+	t.SetData2D(target, 0, gl.RGBA, int32(size.X), int32(size.Y), 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+	return nil
+}
+
+// LoadJPEG decodes a JPEG and uploads it to the texture on the GPU
+func (t *Texture) LoadJPEG(target uint32, data []byte) error {
+	img, err := jpeg.Decode(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to decode: %w", err)
 	}
 
 	b := img.Bounds()
 	size := b.Max.Sub(b.Min)
-	t.SetData2D(0, gl.RGBA, int32(size.X), int32(size.Y), 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+	pixels := make([]byte, size.X*size.Y*3)
+	for x := 0; x < size.X; x++ {
+		for y := 0; y < size.Y; y++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			pixels[0+(x*3)+(y*3*size.X)] = byte(r >> 8)
+			pixels[1+(x*3)+(y*3*size.X)] = byte(g >> 8)
+			pixels[2+(x*3)+(y*3*size.X)] = byte(b >> 8)
+		}
+	}
+
+	t.SetData2D(target, 0, gl.RGB, int32(size.X), int32(size.Y), 0, gl.RGB, gl.UNSIGNED_BYTE, pixels)
 	return nil
 }

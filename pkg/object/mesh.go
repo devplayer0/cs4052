@@ -70,7 +70,7 @@ type Material struct {
 
 func loadSOBJTexture(pbTex *pb.Texture) (*util.Texture, error) {
 	t := util.NewTexture(gl.TEXTURE_2D)
-	if err := t.LoadPNG(pbTex.Data); err != nil {
+	if err := t.LoadPNG(gl.TEXTURE_2D, pbTex.Data); err != nil {
 		return nil, fmt.Errorf("failed to decode PNG: %w", err)
 	}
 

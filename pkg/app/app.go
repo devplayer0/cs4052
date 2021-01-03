@@ -28,6 +28,8 @@ type App struct {
 	skinnedMeshShader *util.Program
 	skeletonShader    *util.Program
 
+	skybox *util.Skybox
+
 	ground    *object.Mesh
 	backpack  *object.Mesh
 	scorpion  *object.Object
@@ -88,12 +90,17 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to set up crosshair: %w", err)
 	}
 
-	att := util.AttenuationParams{Constant: 1, Linear: 0.09, Quadratic: 0.032}
+	a.skybox, err = util.NewSkybox("assets/skybox/")
+	if err != nil {
+		return fmt.Errorf("failed to set up skybox: %w", err)
+	}
+
+	att := util.AttenuationParams{Constant: 1, Linear: 0.07, Quadratic: 0.017}
 	a.brrLamp = util.Lamp{
 		Position: a.brrLampOrbit,
 
 		Ambient:     mgl32.Vec3{0.4, 0.0, 0.0},
-		Diffuse:     mgl32.Vec3{1.4, 0.0, 0.0},
+		Diffuse:     mgl32.Vec3{1, 0.0, 0.0},
 		Specular:    mgl32.Vec3{1, 0, 0},
 		Attenuation: att,
 	}
@@ -112,7 +119,7 @@ func (a *App) Setup() error {
 		{
 			Direction: mgl32.Vec3{-0.2, -1, -0.3},
 			Ambient:   mgl32.Vec3{0.1, 0.1, 0.1},
-			Diffuse:   mgl32.Vec3{1.7, 1.7, 1.7},
+			Diffuse:   mgl32.Vec3{0.7, 0.7, 0.7},
 			Specular:  mgl32.Vec3{0.5, 0.5, 0.5},
 		},
 	}, []*util.Lamp{
@@ -138,6 +145,35 @@ func (a *App) Setup() error {
 
 			Ambient:     mgl32.Vec3{0.05, 0.05, 0.05},
 			Diffuse:     mgl32.Vec3{0.8, 0.8, 0.8},
+			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
+			Attenuation: att,
+		},
+
+		{
+			Position: mgl32.Vec3{-28, 2, -28},
+
+			Diffuse:     mgl32.Vec3{0.9, 0.9, 0.9},
+			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
+			Attenuation: att,
+		},
+		{
+			Position: mgl32.Vec3{28, 2, -28},
+
+			Diffuse:     mgl32.Vec3{0.9, 0.9, 0.9},
+			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
+			Attenuation: att,
+		},
+		{
+			Position: mgl32.Vec3{-28, 2, 28},
+
+			Diffuse:     mgl32.Vec3{0.9, 0.9, 0.9},
+			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
+			Attenuation: att,
+		},
+		{
+			Position: mgl32.Vec3{28, 2, 28},
+
+			Diffuse:     mgl32.Vec3{0.9, 0.9, 0.9},
 			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
 			Attenuation: att,
 		},
@@ -205,7 +241,7 @@ func (a *App) Setup() error {
 	}
 
 	gl.Enable(gl.DEPTH_TEST)
-	gl.DepthFunc(gl.LEQUAL)
+	gl.DepthFunc(gl.LESS)
 
 	return nil
 }
@@ -298,6 +334,8 @@ func (a *App) draw() {
 	}
 
 	a.lighting.DrawCubes(a.projection, a.camera)
+
+	a.skybox.Draw(a.projection, a.camera)
 
 	a.crosshair.Draw()
 

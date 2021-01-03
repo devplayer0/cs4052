@@ -51,6 +51,7 @@ layout(binding = 0) uniform sampler2D tex_diffuse;
 layout(binding = 1) uniform sampler2D tex_specular;
 layout(binding = 2) uniform sampler2D tex_normal;
 layout(binding = 3) uniform sampler2D tex_emmissive;
+layout(binding = 4) uniform samplerCube skybox;
 uniform float shininess;
 
 float get_attenuation(attenuation_params p, float dist) {
