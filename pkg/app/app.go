@@ -199,7 +199,7 @@ func (a *App) Setup() error {
 	a.boids = object.NewBoids(util.Bounds{
 		Min: mgl32.Vec3{-32, 0, -32},
 		Max: mgl32.Vec3{32, 0, 32},
-	}, 0.5)
+	}, 0.07)
 	for i := 0; i < 64; i++ {
 		a.boids.Instances = append(a.boids.Instances, a.boids.MakeBoid())
 	}
@@ -292,9 +292,8 @@ func (a *App) draw() {
 
 	scorpionBase := mgl32.Scale3D(0.01, 0.01, 0.01)
 	for _, b := range a.boids.Instances {
-		p := mgl32.Vec3{b.Position.X(), 0, b.Position.Z()}
-		angle := util.Atan2(p.Z(), p.X())
-		trans := mgl32.Translate3D(p.X(), 0, p.Z()).Mul4(mgl32.HomogRotate3DY(angle)).Mul4(scorpionBase)
+		angle := util.Atan2(b.Velocity.Z(), b.Velocity.X())
+		trans := mgl32.Translate3D(b.Position.X(), 0, b.Position.Z()).Mul4(mgl32.HomogRotate3DY(angle)).Mul4(scorpionBase)
 		a.scorpion.Draw(a.projection, a.camera, trans, a.scorpion.Animations[4], a.animationTime)
 	}
 
