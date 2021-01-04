@@ -48,18 +48,23 @@ func (b *Boid) Cohesion(bs *Boids) {
 // If a boid is too close to another, it will accelerate itself in the opposite
 // direction with the repulsion force
 func (b *Boid) Separation(bs *Boids) {
-	var sep mgl32.Vec3
+	n := 0
+	var avg mgl32.Vec3
 	for _, ob := range bs.Instances {
-		if ob == b {
+		diff := ob.Position.Sub(b.Position)
+		distance := diff.Len()
+		if ob == b || distance > bs.SeparationDistance {
 			continue
 		}
 
-		diff := ob.Position.Sub(b.Position)
-		if diff.Len() < bs.SeparationDistance {
-			sep = sep.Sub(diff)
-		}
+		avg = avg.Sub(diff.Mul(1 / distance))
+		n++
 	}
-	sep = sep.Mul(bs.RepelForce)
+	if n == 0 {
+		return
+	}
+
+	sep := avg.Mul(1 / float32(n)).Normalize().Mul(bs.RepelForce)
 
 	b.Acceleration = b.Acceleration.Add(sep)
 }
@@ -134,8 +139,8 @@ func NewBoids(bounds util.Bounds, maxSpeed float32) *Boids {
 	b := &Boids{
 		Bounds:             bounds,
 		MaxSpeed:           maxSpeed,
-		RepelForce:         0.005,
 		Perception:         6,
+		RepelForce:         0.001,
 		CohesionFactor:     0.000004,
 		AlignmentFactor:    0.0001,
 		SeparationDistance: 2,
