@@ -65,7 +65,8 @@ type Material struct {
 	NormalTexture    *util.Texture
 	EmmissiveTexture *util.Texture
 
-	Shininess float32
+	Shininess      float32
+	Reflectiveness float32
 }
 
 func loadSOBJTexture(pbTex *pb.Texture) (*util.Texture, error) {
@@ -86,7 +87,8 @@ func loadSOBJTexture(pbTex *pb.Texture) (*util.Texture, error) {
 // LoadSOBJMaterial loads a material from a parsed SOBJ
 func LoadSOBJMaterial(m *pb.Material) (*Material, error) {
 	mat := &Material{
-		Shininess: m.Shininess,
+		Shininess:      m.Shininess,
+		Reflectiveness: 0.4,
 	}
 	if mat.Shininess < 64 {
 		mat.Shininess = 64
@@ -355,7 +357,8 @@ func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl3
 			p.SetUniformVec3("m_emmissive_color", v3NonZero(m.Material.Emmissive))
 		}
 
-		p.SetUniformFloat32("shininess", m.Material.Shininess)
+		p.SetUniformFloat32("m_shininess", m.Material.Shininess)
+		p.SetUniformFloat32("m_reflectiveness", m.Material.Reflectiveness)
 	} else {
 		p.SetUniformFloat32("shininess", 16)
 	}

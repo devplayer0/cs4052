@@ -199,9 +199,8 @@ func (a *App) Setup() error {
 	a.ground.Upload(a.meshShader)
 
 	a.backpack, err = object.NewOBJMeshFile("assets/meshes/backpack.obj", &object.Material{
-		Diffuse:   mgl32.Vec3{0.1, 0.4, 0.1},
-		Specular:  mgl32.Vec3{0.1, 0.1, 0.1},
-		Emmissive: mgl32.Vec3{0, 0, 0},
+		Diffuse:        mgl32.Vec3{0, 0.1, 0},
+		Reflectiveness: 0.7,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)

@@ -46,13 +46,14 @@ uniform vec3 m_diffuse_color;
 uniform vec3 m_specular_color;
 uniform bool normal_map;
 uniform vec3 m_emmissive_color;
+uniform float m_shininess;
+uniform float m_reflectiveness;
 
 layout(binding = 0) uniform sampler2D tex_diffuse;
 layout(binding = 1) uniform sampler2D tex_specular;
 layout(binding = 2) uniform sampler2D tex_normal;
 layout(binding = 3) uniform sampler2D tex_emmissive;
 layout(binding = 4) uniform samplerCube env_map;
-uniform float shininess;
 
 float get_attenuation(attenuation_params p, float dist) {
     return 1.0 / (p.constant + p.linear * dist + p.quadratic * (dist*dist));
@@ -89,7 +90,7 @@ vec3 dir_phong(dir l, vec3 normal, vec3 view_dir) {
 
     // specular
     vec3 reflect_dir = reflect(-light_dir, normal);
-    float specular = pow(max(dot(view_dir, reflect_dir), 0.0), shininess);
+    float specular = pow(max(dot(view_dir, reflect_dir), 0.0), m_shininess);
 
     vec3 result;
     result += l.ambient * diffuse_color();
@@ -107,7 +108,7 @@ vec3 lamp_phong(lamp l, vec3 lamp_pos, vec3 pos, vec3 normal, vec3 view_dir) {
 
     // specular
     vec3 reflect_dir = reflect(-lamp_dir, normal);
-    float specular = pow(max(dot(view_dir, reflect_dir), 0.0), shininess);
+    float specular = pow(max(dot(view_dir, reflect_dir), 0.0), m_shininess);
 
     // attenuation
     float dist = length(l.position - world_pos);
@@ -130,7 +131,7 @@ vec3 spotlight_phong(spotlight l, vec3 spot_pos, vec3 pos, vec3 normal, vec3 vie
 
     // specular
     vec3 reflect_dir = reflect(-spot_dir, normal);
-    float specular = pow(max(dot(view_dir, reflect_dir), 0.0), shininess);
+    float specular = pow(max(dot(view_dir, reflect_dir), 0.0), m_shininess);
 
     // attenuation
     float dist = length(l.position - world_pos);
@@ -151,7 +152,7 @@ vec3 spotlight_phong(spotlight l, vec3 spot_pos, vec3 pos, vec3 normal, vec3 vie
 
 vec3 env_reflections(vec3 pos, vec3 normal, vec3 view_dir) {
     vec3 r = reflect(-view_dir, normal);
-    return texture(env_map, r).rgb * 0.3;
+    return texture(env_map, r).rgb * m_reflectiveness;
 }
 
 void main() {

@@ -140,7 +140,7 @@ func NewBoids(bounds util.Bounds, maxSpeed float32) *Boids {
 		Bounds:             bounds,
 		MaxSpeed:           maxSpeed,
 		Perception:         6,
-		RepelForce:         0.001,
+		RepelForce:         0.0003,
 		CohesionFactor:     0.000004,
 		AlignmentFactor:    0.0001,
 		SeparationDistance: 2,
