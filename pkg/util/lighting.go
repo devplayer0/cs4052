@@ -8,14 +8,14 @@ import (
 )
 
 // ShadowResolution is the size of a single depth map's face (square)
-const ShadowResolution = 1024
+const ShadowResolution = 2048
 
 const lightingFragShaderFile = "assets/shaders/lighting.fs"
 const lightingDepthFragShaderFile = "assets/shaders/shadows_depth.fs"
 const lightingDepthGeoShaderFile = "assets/shaders/shadows_depth.gs"
 
 const nearPlane = float32(1.0)
-const farPlane = float32(35.0)
+const farPlane = float32(45.0)
 
 // AttenuationParams represents the lighting attenuation coefficients
 type AttenuationParams struct {

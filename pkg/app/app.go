@@ -194,20 +194,6 @@ func (a *App) Setup() error {
 			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
 			Attenuation: att,
 		},
-		{
-			Position: mgl32.Vec3{28, 2, 28},
-
-			Diffuse:     mgl32.Vec3{0.9, 0.9, 0.9},
-			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
-			Attenuation: att,
-		},
-		{
-			Position: mgl32.Vec3{10, 7, 10},
-
-			Diffuse:     mgl32.Vec3{0.0, 0.4, 0.0},
-			Specular:    mgl32.Vec3{0.0, 0.2, 0.0},
-			Attenuation: att,
-		},
 	}, []*util.Spotlight{
 		&a.spotlight,
 	})
@@ -280,6 +266,7 @@ func (a *App) Setup() error {
 
 	gl.Enable(gl.DEPTH_TEST)
 	gl.DepthFunc(gl.LESS)
+	gl.Enable(gl.CULL_FACE)
 
 	return nil
 }
@@ -361,7 +348,11 @@ func (a *App) draw() {
 
 	// Depth map pass
 	a.lighting.ShadowsDepthPass(func(dpa util.DepthMapParamsApplicator) {
+		// Quick hack: culling breaks the ground since it has no thickness
+		gl.Disable(gl.CULL_FACE)
 		a.ground.DepthMapPass(a.meshDepthShader, groundTrans, dpa)
+		gl.Enable(gl.CULL_FACE)
+
 		a.backpack.DepthMapPass(a.meshDepthShader, backpackTrans, dpa)
 
 		a.scorpion.DepthMapPass(a.scorpionTrans, dpa)
@@ -374,7 +365,9 @@ func (a *App) draw() {
 	gl.Viewport(0, 0, int32(w), int32(h))
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
+	gl.Disable(gl.CULL_FACE)
 	a.ground.Draw(a.meshShader, a.projection, a.camera, groundTrans, a.skybox.Texture, a.lighting.DepthMaps)
+	gl.Enable(gl.CULL_FACE)
 	a.backpack.Draw(a.meshShader, a.projection, a.camera, backpackTrans, a.skybox.Texture, a.lighting.DepthMaps)
 
 	a.scorpion.Draw(a.projection, a.camera, a.scorpionTrans, a.skybox.Texture, a.lighting.DepthMaps)
