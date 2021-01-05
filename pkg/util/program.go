@@ -31,9 +31,12 @@ func NewProgram() *Program {
 }
 
 // Link attaches a vertex and fragment shader and links the OpenGL program
-func (p *Program) Link(vertex, fragment *Shader) error {
+func (p *Program) Link(vertex, fragment, geometry *Shader) error {
 	gl.AttachShader(p.ID, vertex.ID)
 	gl.AttachShader(p.ID, fragment.ID)
+	if geometry != nil {
+		gl.AttachShader(p.ID, geometry.ID)
+	}
 	gl.LinkProgram(p.ID)
 
 	var status int32
@@ -63,7 +66,7 @@ func (p *Program) Link(vertex, fragment *Shader) error {
 }
 
 // LinkFiles is a shortcut to load and compile a vertex and fragment shader from file
-func (p *Program) LinkFiles(vertex, fragment string) error {
+func (p *Program) LinkFiles(vertex, fragment, geometry string) error {
 	v, err := NewShaderFile(gl.VERTEX_SHADER, vertex)
 	if err != nil {
 		return fmt.Errorf("failed to load vertex shader: %w", err)
@@ -80,7 +83,18 @@ func (p *Program) LinkFiles(vertex, fragment string) error {
 		return fmt.Errorf("failed to compile fragment shader: %w", err)
 	}
 
-	return p.Link(v, f)
+	var g *Shader
+	if geometry != "" {
+		g, err = NewShaderFile(gl.GEOMETRY_SHADER, geometry)
+		if err != nil {
+			return fmt.Errorf("failed to load geometry shader: %w", err)
+		}
+		if err := g.Compile(); err != nil {
+			return fmt.Errorf("failed to compile geometry shader: %w", err)
+		}
+	}
+
+	return p.Link(v, f, g)
 }
 
 // Use sets up OpenGL to use this program
@@ -112,6 +126,11 @@ func (p *Program) SetUniformVec3(n string, val mgl32.Vec3) {
 	gl.Uniform3fv(p.Uniform(n), 1, &val[0])
 }
 
+// SetUniformVec3Slice sets a slice of vec3 uniform value
+func (p *Program) SetUniformVec3Slice(n string, vals []mgl32.Vec3) {
+	gl.Uniform3fv(p.Uniform(n), int32(len(vals)), &vals[0][0])
+}
+
 // SetUniformMat3 sets a mat3 uniform value
 func (p *Program) SetUniformMat3(n string, val mgl32.Mat3) {
 	gl.UniformMatrix3fv(p.Uniform(n), 1, false, &val[0])
@@ -123,13 +142,35 @@ func (p *Program) SetUniformMat4(n string, val mgl32.Mat4) {
 }
 
 // SetUniformMat4Slice sets a slice of mat4 uniform value
-func (p *Program) SetUniformMat4Slice(n string, val []mgl32.Mat4) {
-	gl.UniformMatrix4fv(p.Uniform(n), int32(len(val)), false, &val[0][0])
+func (p *Program) SetUniformMat4Slice(n string, vals []mgl32.Mat4) {
+	gl.UniformMatrix4fv(p.Uniform(n), int32(len(vals)), false, &vals[0][0])
 }
 
 // SetUniformInt sets an integer uniform value
 func (p *Program) SetUniformInt(n string, val int32) {
 	gl.Uniform1i(p.Uniform(n), val)
+}
+
+// SetUniformBool sets a boolean uniform value
+func (p *Program) SetUniformBool(n string, val bool) {
+	var iVal int32
+	if val {
+		iVal = 1
+	}
+
+	p.SetUniformInt(n, iVal)
+}
+
+// SetUniformBoolSlice sets a slice of boolean uniform value
+func (p *Program) SetUniformBoolSlice(n string, vals []bool) {
+	iVals := make([]int32, len(vals))
+	for i, val := range vals {
+		if val {
+			iVals[i] = 1
+		}
+	}
+
+	gl.Uniform1iv(p.Uniform(n), int32(len(vals)), &iVals[0])
 }
 
 // Project sets the uniforms for the required 3D transformation matrices

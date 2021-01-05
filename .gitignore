@@ -3,3 +3,4 @@
 /.vscode/
 /pkg/pb/*
 !/pkg/pb/.gitkeep
+/settings.cap

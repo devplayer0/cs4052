@@ -15,7 +15,13 @@ import (
 const (
 	mouseSensitivity = 5
 	movementSpeed    = 5
+	boidCount        = 64
+	brrLamp2Speed    = 3
 )
+
+type skinnedVSParams struct {
+	DepthPass bool
+}
 
 // App represents the graphics application
 type App struct {
@@ -23,10 +29,13 @@ type App struct {
 
 	crosshair *Crosshair
 
-	lighting          *util.Lighting
-	meshShader        *util.Program
-	skinnedMeshShader *util.Program
-	skeletonShader    *util.Program
+	lighting *util.Lighting
+
+	meshShader             *util.Program
+	meshDepthShader        *util.Program
+	skinnedMeshShader      *util.Program
+	skinnedMeshDepthShader *util.Program
+	skeletonShader         *util.Program
 
 	skybox *util.Skybox
 
@@ -50,11 +59,18 @@ type App struct {
 	projection mgl32.Mat4
 	camera     *util.Camera
 
-	brrLamp      util.Lamp
-	brrLampOrbit mgl32.Vec3
-	brrLampAngle float32
+	depthMapsFirstPass bool
+	brrLamp            util.Lamp
+	brrLampOrbit       mgl32.Vec3
+	brrLampAngle       float32
+	brrLamp2           util.Lamp
+	brrLamp2Dir        float32
 
 	spotlight util.Spotlight
+
+	scorpionTrans  mgl32.Mat4
+	tarantulaTrans mgl32.Mat4
+	locustTrans    mgl32.Mat4
 
 	boids *object.Boids
 }
@@ -69,6 +85,13 @@ func NewApp(w *glfw.Window) *App {
 
 		fov:    45,
 		paused: false,
+
+		depthMapsFirstPass: true,
+		brrLamp2Dir:        float32(brrLamp2Speed),
+
+		scorpionTrans:  mgl32.Translate3D(6, 0, 0).Mul4(mgl32.Scale3D(0.02, 0.02, 0.02)),
+		tarantulaTrans: mgl32.Translate3D(0, 0, -2).Mul4(mgl32.Scale3D(0.04, 0.04, 0.04)),
+		locustTrans:    mgl32.Translate3D(-8, 0, -2).Mul4(mgl32.Scale3D(0.01, 0.01, 0.01)),
 	}
 
 	wi, hi := w.GetSize()
@@ -104,6 +127,14 @@ func (a *App) Setup() error {
 		Specular:    mgl32.Vec3{1, 0, 0},
 		Attenuation: att,
 	}
+	a.brrLamp2 = util.Lamp{
+		Position: mgl32.Vec3{6, 3, -1},
+
+		Ambient:     mgl32.Vec3{0.02, 0.05, 0.01},
+		Diffuse:     mgl32.Vec3{0.3, 0.8, 0.15},
+		Specular:    mgl32.Vec3{0.4, 1, 0.2},
+		Attenuation: att,
+	}
 	a.spotlight = util.Spotlight{
 		Cutoff:      util.Cos(mgl32.DegToRad(12.5)),
 		OuterCutoff: util.Cos(mgl32.DegToRad(15)),
@@ -131,15 +162,8 @@ func (a *App) Setup() error {
 			Specular:    mgl32.Vec3{0.18, 0.4, 0.83},
 			Attenuation: att,
 		},
-		{
-			Position: mgl32.Vec3{6, 3, 5},
-
-			Ambient:     mgl32.Vec3{0.02, 0.05, 0.01},
-			Diffuse:     mgl32.Vec3{0.3, 0.8, 0.15},
-			Specular:    mgl32.Vec3{0.4, 1, 0.2},
-			Attenuation: att,
-		},
 		&a.brrLamp,
+		&a.brrLamp2,
 		{
 			Position: mgl32.Vec3{-4, 6, 1},
 
@@ -177,6 +201,13 @@ func (a *App) Setup() error {
 			Specular:    mgl32.Vec3{0.4, 0.4, 0.4},
 			Attenuation: att,
 		},
+		{
+			Position: mgl32.Vec3{10, 7, 10},
+
+			Diffuse:     mgl32.Vec3{0.0, 0.4, 0.0},
+			Specular:    mgl32.Vec3{0.0, 0.2, 0.0},
+			Attenuation: att,
+		},
 	}, []*util.Spotlight{
 		&a.spotlight,
 	})
@@ -188,6 +219,10 @@ func (a *App) Setup() error {
 	if err != nil {
 		return fmt.Errorf("failed to link mesh shaders: %w", err)
 	}
+	a.meshDepthShader, err = a.lighting.DepthProgramVSFile("assets/shaders/shadows_depth.vs")
+	if err != nil {
+		return fmt.Errorf("failed to link mesh depth pass shaders: %w", err)
+	}
 
 	a.ground, err = object.NewOBJMeshFile("assets/meshes/plane.obj", &object.Material{
 		Diffuse:  mgl32.Vec3{0.3, 0.3, 0.3},
@@ -196,7 +231,7 @@ func (a *App) Setup() error {
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
-	a.ground.Upload(a.meshShader)
+	a.ground.Upload(a.meshShader).LinkDepthMap(a.meshDepthShader)
 
 	a.backpack, err = object.NewOBJMeshFile("assets/meshes/backpack.obj", &object.Material{
 		Diffuse:        mgl32.Vec3{0, 0.1, 0},
@@ -205,28 +240,32 @@ func (a *App) Setup() error {
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
 	}
-	a.backpack.Upload(a.meshShader)
+	a.backpack.Upload(a.meshShader).LinkDepthMap(a.meshDepthShader)
 
-	a.skinnedMeshShader, err = a.lighting.ProgramVSFile("assets/shaders/mesh_skinned.vs")
+	a.skinnedMeshShader, err = a.lighting.ProgramVSTemplateFile("assets/shaders/mesh_skinned.vs", skinnedVSParams{false})
 	if err != nil {
 		return fmt.Errorf("failed to link skinned mesh shaders: %w", err)
 	}
+	a.skinnedMeshDepthShader, err = a.lighting.DepthProgramVSTemplateFile("assets/shaders/mesh_skinned.vs", skinnedVSParams{true})
+	if err != nil {
+		return fmt.Errorf("failed to link skinned mesh depth shaders: %w", err)
+	}
 
 	a.skeletonShader = util.NewProgram()
-	if err := a.skeletonShader.LinkFiles("assets/shaders/generic_3d.vs", "assets/shaders/uniform_color.fs"); err != nil {
+	if err := a.skeletonShader.LinkFiles("assets/shaders/generic_3d.vs", "assets/shaders/uniform_color.fs", ""); err != nil {
 		return fmt.Errorf("failed to setup skeleton debug shader: %w", err)
 	}
 	a.skeletonShader.SetUniformVec3("color", mgl32.Vec3{1, 0, 1})
 
-	a.scorpion, err = object.NewObjectFile("assets/objects/scorpion.sobj", a.skinnedMeshShader, a.skeletonShader)
+	a.scorpion, err = object.NewObjectFile("assets/objects/scorpion.sobj", a.skinnedMeshShader, a.skinnedMeshDepthShader, a.skeletonShader)
 	if err != nil {
 		return fmt.Errorf("failed to set up scorpion: %w", err)
 	}
-	a.tarantula, err = object.NewObjectFile("assets/objects/tarantula.sobj", a.skinnedMeshShader, a.skeletonShader)
+	a.tarantula, err = object.NewObjectFile("assets/objects/tarantula.sobj", a.skinnedMeshShader, a.skinnedMeshDepthShader, a.skeletonShader)
 	if err != nil {
 		return fmt.Errorf("failed to set up tarantula: %w", err)
 	}
-	a.locust, err = object.NewObjectFile("assets/objects/locust.sobj", a.skinnedMeshShader, a.skeletonShader)
+	a.locust, err = object.NewObjectFile("assets/objects/locust.sobj", a.skinnedMeshShader, a.skinnedMeshDepthShader, a.skeletonShader)
 	if err != nil {
 		return fmt.Errorf("failed to set up locust: %w", err)
 	}
@@ -235,7 +274,7 @@ func (a *App) Setup() error {
 		Min: mgl32.Vec3{-32, 0, -32},
 		Max: mgl32.Vec3{32, 0, 32},
 	}, 0.07)
-	for i := 0; i < 64; i++ {
+	for i := 0; i < boidCount; i++ {
 		a.boids.Instances = append(a.boids.Instances, a.boids.MakeBoid())
 	}
 
@@ -268,7 +307,10 @@ func (a *App) onKeyEvent(w *glfw.Window, key glfw.Key, scancode int, action glfw
 			a.paused = !a.paused
 		case glfw.KeyN:
 			object.DisableNormalMapping = !object.DisableNormalMapping
+		case glfw.KeyZ:
+			a.lighting.ShadowsEnabled = !a.lighting.ShadowsEnabled
 		}
+
 	}
 
 	switch key {
@@ -314,23 +356,38 @@ func (a *App) readInputs() {
 }
 
 func (a *App) draw() {
+	groundTrans := mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32)).Mul4(mgl32.HomogRotate3DX(mgl32.DegToRad(90)))
+	backpackTrans := mgl32.Translate3D(7, 4, -8)
+
+	// Depth map pass
+	a.lighting.ShadowsDepthPass(func(dpa util.DepthMapParamsApplicator) {
+		a.ground.DepthMapPass(a.meshDepthShader, groundTrans, dpa)
+		a.backpack.DepthMapPass(a.meshDepthShader, backpackTrans, dpa)
+
+		a.scorpion.DepthMapPass(a.scorpionTrans, dpa)
+		a.tarantula.DepthMapPass(a.tarantulaTrans, dpa)
+		a.locust.DepthMapPass(a.locustTrans, dpa)
+	})
+
+	// Drawing pass
+	w, h := a.window.GetSize()
+	gl.Viewport(0, 0, int32(w), int32(h))
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	a.ground.Draw(a.meshShader, a.projection, a.camera,
-		mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32)).Mul4(mgl32.HomogRotate3DX(mgl32.DegToRad(90))),
-		a.skybox.Texture,
-	)
-	a.backpack.Draw(a.meshShader, a.projection, a.camera, mgl32.Translate3D(7, 4, -8), a.skybox.Texture)
+	a.ground.Draw(a.meshShader, a.projection, a.camera, groundTrans, a.skybox.Texture, a.lighting.DepthMaps)
+	a.backpack.Draw(a.meshShader, a.projection, a.camera, backpackTrans, a.skybox.Texture, a.lighting.DepthMaps)
 
-	a.scorpion.Draw(a.projection, a.camera, mgl32.Translate3D(6, 0, 0).Mul4(mgl32.Scale3D(0.02, 0.02, 0.02)), a.skybox.Texture, a.scorpion.Animations[0], a.animationTime)
-	a.tarantula.Draw(a.projection, a.camera, mgl32.Translate3D(0, 1, -2).Mul4(mgl32.Scale3D(0.04, 0.04, 0.04)), a.skybox.Texture, nil, a.animationTime)
-	a.locust.Draw(a.projection, a.camera, mgl32.Translate3D(-8, 1, -2).Mul4(mgl32.Scale3D(0.01, 0.01, 0.01)), a.skybox.Texture, nil, a.animationTime)
+	a.scorpion.Draw(a.projection, a.camera, a.scorpionTrans, a.skybox.Texture, a.lighting.DepthMaps)
+	a.tarantula.Draw(a.projection, a.camera, a.tarantulaTrans, a.skybox.Texture, a.lighting.DepthMaps)
+	a.locust.Draw(a.projection, a.camera, a.locustTrans, a.skybox.Texture, a.lighting.DepthMaps)
 
-	scorpionBase := mgl32.Scale3D(0.01, 0.01, 0.01)
+	boidBase := mgl32.Scale3D(0.01, 0.01, 0.01)
 	for _, b := range a.boids.Instances {
 		angle := util.Atan2(b.Velocity.Z(), b.Velocity.X())
-		trans := mgl32.Translate3D(b.Position.X(), 0, b.Position.Z()).Mul4(mgl32.HomogRotate3DY(angle)).Mul4(scorpionBase)
-		a.scorpion.Draw(a.projection, a.camera, trans, a.skybox.Texture, a.scorpion.Animations[4], a.animationTime)
+		trans := mgl32.Translate3D(b.Position.X(), 0, b.Position.Z()).Mul4(mgl32.HomogRotate3DY(angle)).Mul4(boidBase)
+
+		a.scorpion.Update(a.projection, a.camera, trans, a.scorpion.Animations[4], a.animationTime)
+		a.scorpion.Draw(a.projection, a.camera, trans, a.skybox.Texture, a.lighting.DepthMaps)
 	}
 
 	a.lighting.DrawCubes(a.projection, a.camera)
@@ -369,13 +426,32 @@ func (a *App) Update() {
 	a.spotlight.Position = a.camera.Position
 	a.spotlight.Direction = a.camera.Direction()
 
+	a.brrLamp2.Position = mgl32.Vec3{a.brrLamp2.Position.X() + a.brrLamp2Dir*a.d, a.brrLamp2.Position.Y(), a.brrLamp2.Position.Z()}
+
 	a.lighting.SetViewPos(a.camera.Position)
 	a.lighting.Update(a.meshShader, a.skinnedMeshShader)
+
+	if a.depthMapsFirstPass {
+		a.lighting.UpdateLamps(a.meshShader, a.skinnedMeshShader)
+		a.depthMapsFirstPass = false
+	} else {
+		a.lighting.UpdateLamp(&a.brrLamp, a.meshShader, a.skinnedMeshShader)
+		a.lighting.UpdateLamp(&a.brrLamp2, a.meshShader, a.skinnedMeshShader)
+	}
 
 	a.brrLampAngle += 4 * a.d
 	if a.brrLampAngle > 360 {
 		a.brrLampAngle = 0
 	}
+	if a.brrLamp2.Position.X() > 12 {
+		a.brrLamp2Dir = -float32(brrLamp2Speed)
+	} else if a.brrLamp2.Position.X() < 6 {
+		a.brrLamp2Dir = float32(brrLamp2Speed)
+	}
+
+	a.scorpion.Update(a.projection, a.camera, a.scorpionTrans, a.scorpion.Animations[0], a.animationTime)
+	a.tarantula.Update(a.projection, a.camera, a.tarantulaTrans, nil, 0)
+	a.locust.Update(a.projection, a.camera, a.locustTrans, nil, 0)
 
 	a.draw()
 

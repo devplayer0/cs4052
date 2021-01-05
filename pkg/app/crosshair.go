@@ -20,7 +20,7 @@ func NewCrosshair(win *glfw.Window) (*Crosshair, error) {
 	c := &Crosshair{}
 
 	c.shader = util.NewProgram()
-	if err := c.shader.LinkFiles("assets/shaders/crosshair.vs", "assets/shaders/white.fs"); err != nil {
+	if err := c.shader.LinkFiles("assets/shaders/crosshair.vs", "assets/shaders/white.fs", ""); err != nil {
 		return nil, fmt.Errorf("failed to set up program: %w", err)
 	}
 

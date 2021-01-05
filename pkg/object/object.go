@@ -204,7 +204,8 @@ type meshInstance struct {
 // Object represents a multi-mesh hierarchical animation with skeletal animation
 // support
 type Object struct {
-	shader *util.Program
+	shader      *util.Program
+	depthShader *util.Program
 
 	materials  []*Material
 	meshes     []*Mesh
@@ -214,16 +215,23 @@ type Object struct {
 
 	Debug       bool
 	debugShader *util.Program
+
+	currentTransforms []mgl32.Mat4
+	currentAnim       *Animation
+	currentATime      float32
 }
 
 // NewObject creates a new object
-func NewObject(obj *pb.Object, p, ds *util.Program) (*Object, error) {
+func NewObject(obj *pb.Object, shader, depthShader, ds *util.Program) (*Object, error) {
 	o := &Object{
-		shader: p,
+		shader:      shader,
+		depthShader: depthShader,
 
 		hierarchy: &node{},
 
 		debugShader: ds,
+
+		currentTransforms: make([]mgl32.Mat4, MaxJoints),
 	}
 
 	for _, m := range obj.Materials {
@@ -236,8 +244,9 @@ func NewObject(obj *pb.Object, p, ds *util.Program) (*Object, error) {
 	}
 
 	for _, m := range obj.Meshes {
-		cm := NewSOBJMesh(m, o.materials[m.MaterialID])
-		cm.Upload(p)
+		cm := NewSOBJMesh(m, o.materials[m.MaterialID]).
+			Upload(shader).
+			LinkDepthMap(depthShader)
 		o.meshes = append(o.meshes, cm)
 	}
 
@@ -271,7 +280,7 @@ func NewObject(obj *pb.Object, p, ds *util.Program) (*Object, error) {
 }
 
 // NewObjectFile creates a new object from a file
-func NewObjectFile(objFile string, p, ds *util.Program) (*Object, error) {
+func NewObjectFile(objFile string, shader, depthShader, ds *util.Program) (*Object, error) {
 	data, err := ioutil.ReadFile(objFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -282,24 +291,53 @@ func NewObjectFile(objFile string, p, ds *util.Program) (*Object, error) {
 		return nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
-	return NewObject(&obj, p, ds)
+	return NewObject(&obj, shader, depthShader, ds)
 }
 
-// Draw the object
-func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, envMap *util.Texture, anim *Animation, t float32) {
-	var aTime float32
+// Update updates the state of each of the object's joint transforms
+func (o *Object) Update(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, anim *Animation, t float32) {
+	o.currentAnim = anim
 	if anim != nil {
-		aTime = util.Mod(t*anim.TPS, anim.Duration)
+		o.currentATime = util.Mod(t*anim.TPS, anim.Duration)
+	} else {
+		o.currentATime = 0
 	}
 
 	invTrans := trans.Inv()
-	transforms := make([]mgl32.Mat4, MaxJoints)
-	o.hierarchy.traverse(trans, anim, aTime, func(n *node, parent, local, final mgl32.Mat4) {
+	o.hierarchy.traverse(trans, o.currentAnim, o.currentATime, func(n *node, parent, local, final mgl32.Mat4) {
 		if n.Joint != nil {
-			transforms[n.Joint.ID] = invTrans.Mul4(final).Mul4(n.Joint.InverseBind)
+			o.currentTransforms[n.Joint.ID] = invTrans.Mul4(final).Mul4(n.Joint.InverseBind)
+		}
+	})
+}
+
+// DepthMapPass renders the object only for depth information
+func (o *Object) DepthMapPass(trans mgl32.Mat4, depthParamsApplicator util.DepthMapParamsApplicator) {
+	for _, in := range o.instances {
+		ts := make([]mgl32.Mat4, len(o.currentTransforms))
+		for i, t := range o.currentTransforms {
+			ts[i] = in.InvTransform.Mul4(t)
 		}
 
-		if o.Debug && o.debugShader != nil {
+		o.depthShader.SetUniformMat4Slice("joints", ts)
+		in.Mesh.DepthMapPass(o.depthShader, trans.Mul4(in.Transform), depthParamsApplicator)
+	}
+}
+
+// Draw the object
+func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, envMap, depthMaps *util.Texture) {
+	for _, in := range o.instances {
+		ts := make([]mgl32.Mat4, len(o.currentTransforms))
+		for i, t := range o.currentTransforms {
+			ts[i] = in.InvTransform.Mul4(t)
+		}
+
+		o.shader.SetUniformMat4Slice("joints", ts)
+		in.Mesh.Draw(o.shader, proj, cam, trans.Mul4(in.Transform), envMap, depthMaps)
+	}
+
+	if o.Debug && o.debugShader != nil {
+		o.hierarchy.traverse(trans, o.currentAnim, o.currentATime, func(n *node, parent, local, final mgl32.Mat4) {
 			o.debugShader.Use()
 			o.debugShader.Project(proj, cam, final.Mul4(mgl32.Scale3D(0.05, 0.05, 0.05)))
 			gl.BindVertexArray(n.debug.vao)
@@ -315,16 +353,6 @@ func (o *Object) Draw(proj mgl32.Mat4, cam *util.Camera, trans mgl32.Mat4, envMa
 				})
 				gl.DrawArrays(gl.LINES, 0, 2)
 			}
-		}
-	})
-
-	for _, in := range o.instances {
-		ts := make([]mgl32.Mat4, len(transforms))
-		for i, t := range transforms {
-			ts[i] = in.InvTransform.Mul4(t)
-		}
-
-		o.shader.SetUniformMat4Slice("joints", ts)
-		in.Mesh.Draw(o.shader, proj, cam, trans.Mul4(in.Transform), envMap)
+		})
 	}
 }

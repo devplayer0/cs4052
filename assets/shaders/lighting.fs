@@ -40,6 +40,8 @@ uniform vec3 view_pos;
 uniform dir dirs[N_DIRS];
 uniform lamp lamps[N_LAMPS];
 uniform spotlight spotlights[N_SPOTLIGHTS];
+uniform float far_plane;
+uniform bool shadows_enabled;
 
 // per-object
 uniform vec3 m_diffuse_color;
@@ -54,6 +56,7 @@ layout(binding = 1) uniform sampler2D tex_specular;
 layout(binding = 2) uniform sampler2D tex_normal;
 layout(binding = 3) uniform sampler2D tex_emmissive;
 layout(binding = 4) uniform samplerCube env_map;
+layout(binding = 5) uniform samplerCubeArray depth_maps;
 
 float get_attenuation(attenuation_params p, float dist) {
     return 1.0 / (p.constant + p.linear * dist + p.quadratic * (dist*dist));
@@ -100,7 +103,20 @@ vec3 dir_phong(dir l, vec3 normal, vec3 view_dir) {
     return result;
 }
 
-vec3 lamp_phong(lamp l, vec3 lamp_pos, vec3 pos, vec3 normal, vec3 view_dir) {
+float lamp_shadow(int index, vec3 lamp_pos, vec3 pos) {
+    if (!shadows_enabled) {
+        return 0.0;
+    }
+
+    vec3 frag_to_lamp = pos - lamp_pos;
+    float closest_depth = texture(depth_maps, vec4(frag_to_lamp, index)).r;
+    closest_depth *= far_plane;
+
+    float current_depth = length(frag_to_lamp);
+    float bias = 0.1;
+    return current_depth - bias > closest_depth ? 1.0 : 0.0;
+}
+vec3 lamp_phong(int index, lamp l, vec3 lamp_pos, vec3 pos, vec3 normal, vec3 view_dir) {
     vec3 lamp_dir = normalize(lamp_pos - pos);
 
     // diffuse
@@ -114,10 +130,12 @@ vec3 lamp_phong(lamp l, vec3 lamp_pos, vec3 pos, vec3 normal, vec3 view_dir) {
     float dist = length(l.position - world_pos);
     float attenuation = get_attenuation(l.attenuation, dist);
 
+    float shadow_factor = 1.0 - lamp_shadow(index, lamp_pos, pos);
+
     vec3 result;
     result += l.ambient * diffuse_color() * attenuation;
-    result += l.diffuse * diffuse * diffuse_color() * attenuation;
-    result += l.specular * specular * specular_color() * attenuation;
+    result += l.diffuse * diffuse * diffuse_color() * shadow_factor * attenuation;
+    result += l.specular * specular * specular_color() * shadow_factor * attenuation;
 
     return result;
 }
@@ -181,7 +199,7 @@ void main() {
         } else {
             lamp_pos = l.position;
         }
-        result += lamp_phong(l, lamp_pos, pos, normal, view_dir);
+        result += lamp_phong(i, l, lamp_pos, pos, normal, view_dir);
     }
     for (int i = 0; i < N_SPOTLIGHTS; i++) {
         spotlight l = spotlights[i];

@@ -134,6 +134,7 @@ type Mesh struct {
 	Material *Material
 
 	VAO          uint32
+	DepthVAO     uint32
 	indexBuffer  *util.Buffer
 	vertexBuffer *util.Buffer
 	skinBuffer   *util.Buffer
@@ -277,6 +278,17 @@ func (m *Mesh) init() {
 	if len(m.Weights) > 0 {
 		m.skinBuffer = util.NewBuffer(gl.ARRAY_BUFFER)
 	}
+
+	// We need a separate VAO for the depth pass
+	gl.GenVertexArrays(1, &m.DepthVAO)
+	gl.BindVertexArray(m.DepthVAO)
+
+	// Bind our buffers to the depth VAO too!
+	m.indexBuffer.Bind()
+	m.vertexBuffer.Bind()
+	if len(m.Weights) > 0 {
+		m.skinBuffer.Bind()
+	}
 }
 
 // ReplaceVertices re-uploads mesh data into the vertex buffers
@@ -318,6 +330,22 @@ func (m *Mesh) Upload(p *util.Program) *Mesh {
 	return m
 }
 
+// LinkDepthMap links the vertex attributes needed for the depth map shaders
+func (m *Mesh) LinkDepthMap(p *util.Program) *Mesh {
+	gl.BindVertexArray(m.DepthVAO)
+
+	m.vertexBuffer.LinkVertexPointer(p, "frag_pos", 3, gl.FLOAT, VertexSize, 0)
+
+	if m.skinBuffer != nil {
+		m.skinBuffer.LinkVertexIPointer(p, "joint_ids_a", 4, gl.UNSIGNED_INT, WeightsSize, 0)
+		m.skinBuffer.LinkVertexIPointer(p, "joint_ids_b", 4, gl.UNSIGNED_INT, WeightsSize, 16)
+		m.skinBuffer.LinkVertexPointer(p, "weights_a", 4, gl.FLOAT, WeightsSize, 32)
+		m.skinBuffer.LinkVertexPointer(p, "weights_b", 4, gl.FLOAT, WeightsSize, 48)
+	}
+
+	return m
+}
+
 func v3NonZero(v mgl32.Vec3) mgl32.Vec3 {
 	if v == zeroVec3 {
 		return mgl32.Vec3{0.0001, 0.0001, 0.0001}
@@ -327,7 +355,7 @@ func v3NonZero(v mgl32.Vec3) mgl32.Vec3 {
 }
 
 // Draw renders the mesh with the given shader and projection
-func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl32.Mat4, envMap *util.Texture) {
+func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl32.Mat4, envMap *util.Texture, depthMaps *util.Texture) {
 	p.Use()
 	p.Project(proj, c, trans)
 
@@ -346,9 +374,9 @@ func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl3
 
 		if !DisableNormalMapping && m.Material.NormalTexture != nil {
 			m.Material.NormalTexture.Activate(p, "tex_normal", 2)
-			p.SetUniformInt("normal_map", 1)
+			p.SetUniformBool("normal_map", true)
 		} else {
-			p.SetUniformInt("normal_map", 0)
+			p.SetUniformBool("normal_map", false)
 		}
 
 		if m.Material.EmmissiveTexture != nil {
@@ -364,6 +392,9 @@ func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl3
 	}
 
 	envMap.Activate(p, "env_map", 4)
+	if depthMaps != nil {
+		depthMaps.Activate(p, "depth_maps", 5)
+	}
 
 	gl.BindVertexArray(m.VAO)
 	if MeshWireFrame {
@@ -371,4 +402,14 @@ func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl3
 	}
 	gl.DrawElements(gl.TRIANGLES, int32(len(m.Indices)), gl.UNSIGNED_INT, gl.PtrOffset(0))
 	gl.PolygonMode(gl.FRONT_AND_BACK, gl.FILL)
+}
+
+// DepthMapPass renders the mesh only for depth information
+func (m *Mesh) DepthMapPass(p *util.Program, trans mgl32.Mat4, depthParamsApplicator util.DepthMapParamsApplicator) {
+	p.Use()
+	p.SetUniformMat4("model", trans)
+	depthParamsApplicator(p)
+
+	gl.BindVertexArray(m.DepthVAO)
+	gl.DrawElements(gl.TRIANGLES, int32(len(m.Indices)), gl.UNSIGNED_INT, gl.PtrOffset(0))
 }

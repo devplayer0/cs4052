@@ -52,7 +52,23 @@ func (t *Texture) SetIParameter(param uint32, value int32) {
 // SetData2D uploads 2D pixel data to the texture on the GPU
 func (t *Texture) SetData2D(target uint32, level, internalformat, width, height, border int32, format, xtype uint32, pixels []byte) {
 	t.Bind()
-	gl.TexImage2D(target, level, internalformat, width, height, border, format, xtype, gl.Ptr(pixels))
+
+	ptr := gl.Ptr(nil)
+	if pixels != nil {
+		ptr = gl.Ptr(pixels)
+	}
+	gl.TexImage2D(target, level, internalformat, width, height, border, format, xtype, ptr)
+}
+
+// SetData3D uploads 3D pixel data to the texture on the GPU
+func (t *Texture) SetData3D(target uint32, level, internalformat, width, height, depth, border int32, format, xtype uint32, pixels []byte) {
+	t.Bind()
+
+	ptr := gl.Ptr(nil)
+	if pixels != nil {
+		ptr = gl.Ptr(pixels)
+	}
+	gl.TexImage3D(target, level, internalformat, width, height, depth, border, format, xtype, ptr)
 }
 
 // LoadPNG decodes a PNG and uploads it to the texture on the GPU

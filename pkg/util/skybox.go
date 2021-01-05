@@ -50,7 +50,7 @@ func NewSkybox(pathBase string) (*Skybox, error) {
 	t.SetIParameter(gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
 
 	shader := NewProgram()
-	if err := shader.LinkFiles("assets/shaders/skybox.vs", "assets/shaders/skybox.fs"); err != nil {
+	if err := shader.LinkFiles("assets/shaders/skybox.vs", "assets/shaders/skybox.fs", ""); err != nil {
 		return nil, fmt.Errorf("failed to initialize shader: %w", err)
 	}
 

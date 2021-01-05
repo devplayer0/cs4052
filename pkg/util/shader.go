@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/go-gl/gl/v4.6-core/gl"
 )
 
@@ -34,7 +35,7 @@ func NewShader(t uint32, source string) *Shader {
 // NewShaderTemplate creates a new OpenGL shader from source pre-processed as a
 // Go template
 func NewShaderTemplate(t uint32, source string, tplData interface{}) (*Shader, error) {
-	tpl, err := template.New("anonymous").Parse(source)
+	tpl, err := template.New("anonymous").Funcs(sprig.TxtFuncMap()).Parse(source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
