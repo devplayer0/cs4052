@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/jpeg"
 	"image/png"
+	"io/ioutil"
 
 	"github.com/go-gl/gl/v4.6-core/gl"
 )
@@ -47,6 +48,16 @@ func (t *Texture) GenerateMipmap() {
 func (t *Texture) SetIParameter(param uint32, value int32) {
 	t.Bind()
 	gl.TexParameteri(t.ty, param, value)
+}
+
+// Apply2DDefaults applies some common default values (generating mipmap,
+// wrapping and filtering)
+func (t *Texture) Apply2DDefaults() {
+	t.GenerateMipmap()
+	t.SetIParameter(gl.TEXTURE_WRAP_S, gl.REPEAT)
+	t.SetIParameter(gl.TEXTURE_WRAP_T, gl.REPEAT)
+	t.SetIParameter(gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+	t.SetIParameter(gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 }
 
 // SetData2D uploads 2D pixel data to the texture on the GPU
@@ -116,4 +127,15 @@ func (t *Texture) LoadJPEG(target uint32, data []byte) error {
 
 	t.SetData2D(target, 0, gl.RGB, int32(size.X), int32(size.Y), 0, gl.RGB, gl.UNSIGNED_BYTE, pixels)
 	return nil
+}
+
+// LoadJPEGFile is a convenience method which reads a JPEG file, decodes it and
+// uploads it to the texture on the GPU
+func (t *Texture) LoadJPEGFile(target uint32, file string) error {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return fmt.Errorf("failed to read file %v: %w", file, err)
+	}
+
+	return t.LoadJPEG(target, data)
 }

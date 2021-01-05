@@ -75,11 +75,7 @@ func loadSOBJTexture(pbTex *pb.Texture) (*util.Texture, error) {
 		return nil, fmt.Errorf("failed to decode PNG: %w", err)
 	}
 
-	t.GenerateMipmap()
-	t.SetIParameter(gl.TEXTURE_WRAP_S, gl.REPEAT)
-	t.SetIParameter(gl.TEXTURE_WRAP_T, gl.REPEAT)
-	t.SetIParameter(gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-	t.SetIParameter(gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	t.Apply2DDefaults()
 
 	return t, nil
 }
@@ -90,8 +86,8 @@ func LoadSOBJMaterial(m *pb.Material) (*Material, error) {
 		Shininess:      m.Shininess,
 		Reflectiveness: 0.4,
 	}
-	if mat.Shininess < 64 {
-		mat.Shininess = 64
+	if mat.Shininess < 32 {
+		mat.Shininess = 32
 	}
 
 	var err error
@@ -362,12 +358,14 @@ func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl3
 	if m.Material != nil {
 		if m.Material.DiffuseTexture != nil {
 			m.Material.DiffuseTexture.Activate(p, "tex_diffuse", 0)
+			p.SetUniformVec3("m_diffuse_color", zeroVec3)
 		} else {
 			p.SetUniformVec3("m_diffuse_color", v3NonZero(m.Material.Diffuse))
 		}
 
 		if m.Material.SpecularTexture != nil {
 			m.Material.SpecularTexture.Activate(p, "tex_specular", 1)
+			p.SetUniformVec3("m_specular_color", zeroVec3)
 		} else {
 			p.SetUniformVec3("m_specular_color", v3NonZero(m.Material.Specular))
 		}
@@ -381,6 +379,7 @@ func (m *Mesh) Draw(p *util.Program, proj mgl32.Mat4, c *util.Camera, trans mgl3
 
 		if m.Material.EmmissiveTexture != nil {
 			m.Material.EmmissiveTexture.Activate(p, "tex_emissive", 3)
+			p.SetUniformVec3("m_emmissive_color", zeroVec3)
 		} else {
 			p.SetUniformVec3("m_emmissive_color", v3NonZero(m.Material.Emmissive))
 		}

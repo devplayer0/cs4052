@@ -37,7 +37,8 @@ type App struct {
 	skinnedMeshDepthShader *util.Program
 	skeletonShader         *util.Program
 
-	skybox *util.Skybox
+	skybox  *util.Skybox
+	skybox2 *util.Skybox
 
 	ground    *object.Mesh
 	backpack  *object.Mesh
@@ -113,9 +114,13 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to set up crosshair: %w", err)
 	}
 
-	a.skybox, err = util.NewSkybox("assets/skybox/")
+	a.skybox, err = util.NewSkybox("assets/skyboxes/mountains/")
 	if err != nil {
 		return fmt.Errorf("failed to set up skybox: %w", err)
+	}
+	a.skybox2, err = util.NewSkybox("assets/skyboxes/city/")
+	if err != nil {
+		return fmt.Errorf("failed to set up skybox 2: %w", err)
 	}
 
 	att := util.AttenuationParams{Constant: 1, Linear: 0.07, Quadratic: 0.017}
@@ -210,9 +215,25 @@ func (a *App) Setup() error {
 		return fmt.Errorf("failed to link mesh depth pass shaders: %w", err)
 	}
 
+	groundDiffuse := util.NewTexture(gl.TEXTURE_2D)
+	if err := groundDiffuse.LoadJPEGFile(gl.TEXTURE_2D, "assets/textures/brickwall.jpg"); err != nil {
+		return fmt.Errorf("failed to load ground texture: %w", err)
+	}
+	groundDiffuse.Apply2DDefaults()
+
+	groundNormal := util.NewTexture(gl.TEXTURE_2D)
+	if err := groundNormal.LoadJPEGFile(gl.TEXTURE_2D, "assets/textures/brickwall_normal.jpg"); err != nil {
+		return fmt.Errorf("failed to load ground normal map texture: %w", err)
+	}
+	groundNormal.Apply2DDefaults()
+
 	a.ground, err = object.NewOBJMeshFile("assets/meshes/plane.obj", &object.Material{
-		Diffuse:  mgl32.Vec3{0.3, 0.3, 0.3},
 		Specular: mgl32.Vec3{0.1, 0.1, 0.1},
+
+		DiffuseTexture: groundDiffuse,
+		NormalTexture:  groundNormal,
+
+		Shininess: 16,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
@@ -296,6 +317,10 @@ func (a *App) onKeyEvent(w *glfw.Window, key glfw.Key, scancode int, action glfw
 			object.DisableNormalMapping = !object.DisableNormalMapping
 		case glfw.KeyZ:
 			a.lighting.ShadowsEnabled = !a.lighting.ShadowsEnabled
+		case glfw.KeyX:
+			tmp := a.skybox
+			a.skybox = a.skybox2
+			a.skybox2 = tmp
 		}
 
 	}
@@ -343,16 +368,12 @@ func (a *App) readInputs() {
 }
 
 func (a *App) draw() {
-	groundTrans := mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32)).Mul4(mgl32.HomogRotate3DX(mgl32.DegToRad(90)))
+	groundTrans := mgl32.Translate3D(0, 0, 0).Mul4(mgl32.Scale3D(32, 32, 32))
 	backpackTrans := mgl32.Translate3D(7, 4, -8)
 
 	// Depth map pass
 	a.lighting.ShadowsDepthPass(func(dpa util.DepthMapParamsApplicator) {
-		// Quick hack: culling breaks the ground since it has no thickness
-		gl.Disable(gl.CULL_FACE)
 		a.ground.DepthMapPass(a.meshDepthShader, groundTrans, dpa)
-		gl.Enable(gl.CULL_FACE)
-
 		a.backpack.DepthMapPass(a.meshDepthShader, backpackTrans, dpa)
 
 		a.scorpion.DepthMapPass(a.scorpionTrans, dpa)
@@ -365,9 +386,7 @@ func (a *App) draw() {
 	gl.Viewport(0, 0, int32(w), int32(h))
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	gl.Disable(gl.CULL_FACE)
 	a.ground.Draw(a.meshShader, a.projection, a.camera, groundTrans, a.skybox.Texture, a.lighting.DepthMaps)
-	gl.Enable(gl.CULL_FACE)
 	a.backpack.Draw(a.meshShader, a.projection, a.camera, backpackTrans, a.skybox.Texture, a.lighting.DepthMaps)
 
 	a.scorpion.Draw(a.projection, a.camera, a.scorpionTrans, a.skybox.Texture, a.lighting.DepthMaps)

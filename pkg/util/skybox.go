@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 
 	"github.com/go-gl/gl/v4.6-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
@@ -33,12 +32,7 @@ func NewSkybox(pathBase string) (*Skybox, error) {
 
 	for side, glTarget := range cubeSides {
 		path := pathBase + side + ".jpg"
-		data, err := ioutil.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read texture file %v: %w", path, err)
-		}
-
-		if err := t.LoadJPEG(glTarget, data); err != nil {
+		if err := t.LoadJPEGFile(glTarget, path); err != nil {
 			return nil, fmt.Errorf("failed to upload %v texture to GPU: %w", side, err)
 		}
 	}
