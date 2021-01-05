@@ -108,7 +108,7 @@ float lamp_shadow(int index, vec3 lamp_pos, vec3 pos) {
         return 0.0;
     }
 
-    vec3 frag_to_lamp = pos - lamp_pos;
+    vec3 frag_to_lamp = world_pos - lamp_pos;
     float closest_depth = texture(depth_maps, vec4(frag_to_lamp, index)).r;
     closest_depth *= far_plane;
 
@@ -130,7 +130,7 @@ vec3 lamp_phong(int index, lamp l, vec3 lamp_pos, vec3 pos, vec3 normal, vec3 vi
     float dist = length(l.position - world_pos);
     float attenuation = get_attenuation(l.attenuation, dist);
 
-    float shadow_factor = 1.0 - lamp_shadow(index, lamp_pos, pos);
+    float shadow_factor = 1.0 - lamp_shadow(index, l.position, pos);
 
     vec3 result;
     result += l.ambient * diffuse_color() * attenuation;

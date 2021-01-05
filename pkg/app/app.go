@@ -228,12 +228,10 @@ func (a *App) Setup() error {
 	groundNormal.Apply2DDefaults()
 
 	a.ground, err = object.NewOBJMeshFile("assets/meshes/plane.obj", &object.Material{
-		Specular: mgl32.Vec3{0.1, 0.1, 0.1},
+		Specular: mgl32.Vec3{0.05, 0.05, 0.05},
 
 		DiffuseTexture: groundDiffuse,
 		NormalTexture:  groundNormal,
-
-		Shininess: 16,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to load mesh: %w", err)
