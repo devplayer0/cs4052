@@ -259,7 +259,7 @@ func (a *App) Setup() error {
 	a.boids = object.NewBoids(util.Bounds{
 		Min: mgl32.Vec3{-32, 0, -32},
 		Max: mgl32.Vec3{32, 0, 32},
-	}, 0.07)
+	}, 0.02)
 	for i := 0; i < boidCount; i++ {
 		a.boids.Instances = append(a.boids.Instances, a.boids.MakeBoid())
 	}

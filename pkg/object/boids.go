@@ -140,7 +140,7 @@ func NewBoids(bounds util.Bounds, maxSpeed float32) *Boids {
 		Bounds:             bounds,
 		MaxSpeed:           maxSpeed,
 		Perception:         6,
-		RepelForce:         0.0003,
+		RepelForce:         0.0001,
 		CohesionFactor:     0.000004,
 		AlignmentFactor:    0.0001,
 		SeparationDistance: 2,
@@ -158,7 +158,7 @@ func (bs *Boids) MakeBoid() *Boid {
 	hi[2] *= rand.Float32()
 
 	b := &Boid{
-		Velocity: util.RandVec3().Mul(bs.MaxSpeed),
+		Velocity: util.RandVec3().Mul(-2 * bs.MaxSpeed).Add(mgl32.Vec3{bs.MaxSpeed, bs.MaxSpeed, bs.MaxSpeed}),
 		Position: hi.Add(bs.Bounds.Min),
 	}
 
